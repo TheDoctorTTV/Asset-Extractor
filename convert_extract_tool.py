@@ -101,7 +101,7 @@ help_menu = tb.Menu(menubar, tearoff=0)
 menubar.add_cascade(label="File", menu=file_menu)
 menubar.add_cascade(label="Help", menu=help_menu)
 file_menu.add_command(label="Exit", command=root.quit)
-help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About", "Unity Asset Extractor & Converter\nVersion 0.7 Alpha\nMade by TheDoctorTTV"))
+help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About", "Unity Asset Extractor & Converter\nVersion 0.3 Alpha\nMade by TheDoctorTTV"))
 
 # Notebook Setup
 notebook = tb.Notebook(root)
