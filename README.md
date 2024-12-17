@@ -79,8 +79,6 @@ Beat-Saber-Map-Extractor-Tool/
 ├── convert_gz_to_dat.py         # Convert .gz.asset files to .dat
 ├── raw_asset_bundle.unity3d     # Saved raw Unity asset bundle
 ├── extracted_assets/            # Folder for extracted assets
-│   ├── TextAsset/               # Exported TextAssets from AssetStudio
-│   └── ...                      # Other extracted files
 └── README.md                    # Project documentation
 ```
 
