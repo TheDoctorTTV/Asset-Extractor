@@ -6,8 +6,8 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 
 def extract_asset_bundle(file_path):
-    # Use the script's directory for the output
-    script_directory = os.path.dirname(os.path.abspath(__file__))
+    # Use the executable's directory for the output
+    script_directory = os.getcwd()
     output_directory = os.path.join(script_directory, "extracted_assets")
     raw_bundle_path = os.path.join(output_directory, "raw_asset_bundle.unity3d")
     
