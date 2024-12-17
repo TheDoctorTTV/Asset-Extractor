@@ -14,11 +14,11 @@ This tool allows you to extract and process Unity asset files (such as `.gz.asse
 ---
 
 ## **Tools Included**
-1. **extract_unity_assets.py**
+1. **extract_unity_assets.exe**
    - Extracts raw Unity asset bundles and saves them for inspection.
    - Saves all extracted data into an organized folder.
 
-2. **convert_gz_to_dat.py**
+2. **convert_gz_to_dat.exe**
    - Converts `.gz.asset` files into `.dat` files for further use.
 
 ---
@@ -26,11 +26,11 @@ This tool allows you to extract and process Unity asset files (such as `.gz.asse
 ## **How to Use the Tools**
 
 ### **Step 1: Extract Unity Assets**
-1. Place your **asset bundle file** in the root folder (where the Python scripts are located).
-2. Run `extract_unity_assets.py`.
+1. Place your **asset bundle file** in the root folder (where the `.exe` files are located).
+2. Run `extract_unity_assets.exe`.
 3. A GUI will open. Press **"Browse File"**.
 4. Locate and open your Unity asset file.
-5. The script will:
+5. The tool will:
    - Extract the raw asset bundle into an `extracted_assets` folder.
    - Save the `raw_asset_bundle.unity3d` file for further use.
 
@@ -48,28 +48,15 @@ This tool allows you to extract and process Unity asset files (such as `.gz.asse
 ---
 
 ### **Step 3: Convert `.gz.asset` Files to `.dat` Files**
-1. Run `convert_gz_to_dat.py`.
+1. Run `convert_gz_to_dat.exe`.
 2. When the GUI opens:
    - Browse for the **"TextAsset"** folder exported by AssetStudio.
    - Select the folder where you want to save the converted `.dat` files.
-3. The script will convert all `.gz.asset` files into `.dat` files.
+3. The tool will convert all `.gz.asset` files into `.dat` files.
 
 ---
 
 ## **Requirements**
-- Python 3.6 or newer
-- **Required Libraries**: Listed in `requirements.txt`
-
-To install all required libraries, run:
-```bash
-pip install -r requirements.txt
-```
-
-**File: requirements.txt**
-```plaintext
-UnityPy
-```
-
 - **AssetStudio** (for inspecting and exporting assets)
 
 ---
@@ -79,9 +66,8 @@ Once completed, your project directory will look like this:
 ```
 Beat-Saber-Map-Extractor-Tool/
 │
-├── extract_unity_assets.py      # Extract Unity Asset Bundles
-├── convert_gz_to_dat.py         # Convert .gz.asset files to .dat
-├── requirements.txt             # Python dependencies
+├── extract_unity_assets.exe     # Extract Unity Asset Bundles
+├── convert_gz_to_dat.exe        # Convert .gz.asset files to .dat
 ├── raw_asset_bundle.unity3d     # Saved raw Unity asset bundle
 ├── extracted_assets/            # Folder for extracted assets
 └── README.md                    # Project documentation
@@ -102,4 +88,3 @@ This project is open-source and licensed under the MIT License.
 ## **Credits**
 - **[AssetStudio](https://github.com/Perfare/AssetStudio)** for asset inspection and exporting.
 - Built with Python and `UnityPy`.
-```
