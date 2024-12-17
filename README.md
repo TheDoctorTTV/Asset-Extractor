@@ -57,7 +57,7 @@ This tool allows you to extract and process Unity asset files (such as `.gz.asse
 ---
 
 ## **Requirements**
-- Python 3.6 or newer
+- Python 3.10 or newer
 - Required Libraries:
    - `UnityPy`
    - `tkinter` (built into Python)
