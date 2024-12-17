@@ -58,15 +58,19 @@ This tool allows you to extract and process Unity asset files (such as `.gz.asse
 
 ## **Requirements**
 - Python 3.10 or newer
-- Required Libraries:
-   - `UnityPy`
-   - `tkinter` (built into Python)
-- **AssetStudio** (for inspecting and exporting assets)
+- **Required Libraries**: Listed in `requirements.txt`
 
-Install required Python libraries with:
+To install all required libraries, run:
 ```bash
-pip install UnityPy
+pip install -r requirements.txt
 ```
+
+**File: requirements.txt**
+```plaintext
+UnityPy
+```
+
+- **AssetStudio** (for inspecting and exporting assets)
 
 ---
 
@@ -77,6 +81,7 @@ Beat-Saber-Map-Extractor-Tool/
 │
 ├── extract_unity_assets.py      # Extract Unity Asset Bundles
 ├── convert_gz_to_dat.py         # Convert .gz.asset files to .dat
+├── requirements.txt             # Python dependencies
 ├── raw_asset_bundle.unity3d     # Saved raw Unity asset bundle
 ├── extracted_assets/            # Folder for extracted assets
 └── README.md                    # Project documentation
@@ -97,3 +102,4 @@ This project is open-source and licensed under the MIT License.
 ## **Credits**
 - **[AssetStudio](https://github.com/Perfare/AssetStudio)** for asset inspection and exporting.
 - Built with Python and `UnityPy`.
+```
