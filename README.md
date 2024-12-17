@@ -61,20 +61,6 @@ This tool allows you to extract and process Unity asset files (such as `.gz.asse
 
 ---
 
-## **Folder Structure**
-Once completed, your project directory will look like this:
-```
-Beat-Saber-Map-Extractor-Tool/
-│
-├── extract_unity_assets.exe     # Extract Unity Asset Bundles
-├── convert_gz_to_dat.exe        # Convert .gz.asset files to .dat
-├── raw_asset_bundle.unity3d     # Saved raw Unity asset bundle
-├── extracted_assets/            # Folder for extracted assets
-└── README.md                    # Project documentation
-```
-
----
-
 ## **Disclaimer**
 This tool is for **educational purposes only**. It is not intended to infringe on any copyrights or violate any terms of service. Please use responsibly and respect the rights of all content creators.
 
