@@ -3,9 +3,8 @@ import gzip
 import UnityPy
 import shutil
 import sys
-import ttkbootstrap as tb
-from tkinter import filedialog, messagebox, StringVar
-from ttkbootstrap.constants import *
+import customtkinter as ctk
+from tkinter import filedialog, messagebox, Menu  # Standard tkinter Menu
 
 # ----------------- GZ.Asset to .DAT Conversion -----------------
 def convert_files(input_folder, output_folder):
@@ -87,48 +86,51 @@ def browse_asset_file():
         extract_asset_bundle(file_path)
 
 # ----------------- GUI Setup -----------------
-root = tb.Window(themename="darkly")
+ctk.set_appearance_mode("Dark")  # Set dark mode
+ctk.set_default_color_theme("blue")  # Default theme color
+
+root = ctk.CTk()
 root.title("GZ.Asset Converter & Unity Asset Extractor")
 root.geometry("700x500")
-root.configure(bg="#2E2E2E")  # Dark background
 
-# Menu Bar Setup
-menubar = tb.Menu(root)
-root.config(menu=menubar)
+# Input/Output Folder Variables
+input_folder_var = ctk.StringVar()
+output_folder_var = ctk.StringVar()
 
-file_menu = tb.Menu(menubar, tearoff=0)
-help_menu = tb.Menu(menubar, tearoff=0)
-menubar.add_cascade(label="File", menu=file_menu)
-menubar.add_cascade(label="Help", menu=help_menu)
-file_menu.add_command(label="Exit", command=root.quit)
-help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About", "Unity Asset Extractor & Converter\nVersion 0.3 Alpha\nMade by TheDoctorTTV"))
-
-# Notebook Setup
-notebook = tb.Notebook(root)
-notebook.pack(expand=1, fill="both", padx=10, pady=10)
+# Tabs
+tabview = ctk.CTkTabview(root)
+tabview.pack(expand=True, fill="both", padx=10, pady=10)
 
 # Tab 1: GZ.Asset to .DAT Converter
-tab1 = tb.Frame(notebook, bootstyle="dark")
-notebook.add(tab1, text="GZ.Asset to .DAT")
-input_folder_var = StringVar()
-output_folder_var = StringVar()
+tab1 = tabview.add("GZ.Asset to .DAT")
 
-tb.Label(tab1, text="Input Folder:", font=("Segoe UI", 12), background="#2E2E2E", foreground="#FFFFFF").pack(pady=5)
-tb.Entry(tab1, textvariable=input_folder_var, width=60).pack(pady=5)
-tb.Button(tab1, text="Browse", bootstyle="secondary", command=browse_input_folder).pack(pady=5)
+ctk.CTkLabel(tab1, text="Input Folder:", font=("Segoe UI", 14)).pack(pady=5)
+ctk.CTkEntry(tab1, textvariable=input_folder_var, width=400).pack(pady=5)
+ctk.CTkButton(tab1, text="Browse", command=browse_input_folder).pack(pady=5)
 
-tb.Label(tab1, text="Output Folder:", font=("Segoe UI", 12), background="#2E2E2E", foreground="#FFFFFF").pack(pady=5)
-tb.Entry(tab1, textvariable=output_folder_var, width=60).pack(pady=5)
-tb.Button(tab1, text="Browse", bootstyle="secondary", command=browse_output_folder).pack(pady=5)
+ctk.CTkLabel(tab1, text="Output Folder:", font=("Segoe UI", 14)).pack(pady=5)
+ctk.CTkEntry(tab1, textvariable=output_folder_var, width=400).pack(pady=5)
+ctk.CTkButton(tab1, text="Browse", command=browse_output_folder).pack(pady=5)
 
-tb.Button(tab1, text="Start Conversion", bootstyle="secondary", command=start_conversion).pack(pady=10)
+ctk.CTkButton(tab1, text="Start Conversion", fg_color="green", command=start_conversion).pack(pady=20)
 
 # Tab 2: Unity Asset Bundle Extractor
-tab2 = tb.Frame(notebook, bootstyle="dark")
-notebook.add(tab2, text="Unity Asset Extractor")
+tab2 = tabview.add("Unity Asset Extractor")
 
-tb.Label(tab2, text="Unity Asset Bundle Extractor", font=("Segoe UI", 14), background="#2E2E2E", foreground="#FFFFFF").pack(pady=10)
-tb.Button(tab2, text="Browse Unity Asset File", bootstyle="secondary", command=browse_asset_file).pack(pady=20)
+ctk.CTkLabel(tab2, text="Unity Asset Bundle Extractor", font=("Segoe UI", 18)).pack(pady=10)
+ctk.CTkButton(tab2, text="Browse Unity Asset File", command=browse_asset_file).pack(pady=20)
+
+# Menu Bar Setup (Standard Tkinter Menu)
+menu = Menu(root)
+root.config(menu=menu)
+
+file_menu = Menu(menu, tearoff=0)
+menu.add_cascade(label="File", menu=file_menu)
+file_menu.add_command(label="Exit", command=root.quit)
+
+help_menu = Menu(menu, tearoff=0)
+menu.add_cascade(label="Help", menu=help_menu)
+help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About", "Unity Asset Extractor & Converter\nVersion 0.3.1 Alpha\nMade by TheDoctorTTV"))
 
 # Start the application
 root.mainloop()
