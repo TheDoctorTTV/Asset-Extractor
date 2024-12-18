@@ -4,7 +4,7 @@ import UnityPy
 import shutil
 import sys
 import customtkinter as ctk
-from tkinter import filedialog, messagebox, Menu  # Standard tkinter Menu
+from tkinter import filedialog, messagebox
 
 # ----------------- GZ.Asset to .DAT Conversion -----------------
 def convert_files(input_folder, output_folder):
@@ -44,7 +44,11 @@ def start_conversion():
 
     convert_files(input_folder, output_folder)
 
-# ----------------- Unity Asset Bundle Extraction -----------------
+def browse_asset_file():
+    file_path = filedialog.askopenfilename(title="Select Unity Asset Bundle File")
+    if file_path:
+        extract_asset_bundle(file_path)
+
 def extract_asset_bundle(file_path):
     base_directory = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(__file__))
     output_directory = os.path.join(base_directory, "extracted_assets")
@@ -80,57 +84,81 @@ def extract_asset_bundle(file_path):
 
     messagebox.showinfo("Success", f"Extraction complete! Files saved to:\n{output_directory}")
 
-def browse_asset_file():
-    file_path = filedialog.askopenfilename(title="Select Unity Asset Bundle File")
-    if file_path:
-        extract_asset_bundle(file_path)
-
 # ----------------- GUI Setup -----------------
-ctk.set_appearance_mode("Dark")  # Set dark mode
-ctk.set_default_color_theme("blue")  # Default theme color
+ctk.set_default_color_theme("blue")
 
-root = ctk.CTk()
-root.title("GZ.Asset Converter & Unity Asset Extractor")
-root.geometry("700x500")
+class ModernUI(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        
+        # Window properties
+        self.title("Beat Saber Mapping Extractor")
+        self.geometry("1000x600")
+        self.resizable(False, False)
 
-# Input/Output Folder Variables
-input_folder_var = ctk.StringVar()
-output_folder_var = ctk.StringVar()
+        # Sidebar
+        self.sidebar = ctk.CTkFrame(self, width=200, corner_radius=0)
+        self.sidebar.pack(side="left", fill="y")
 
-# Tabs
-tabview = ctk.CTkTabview(root)
-tabview.pack(expand=True, fill="both", padx=10, pady=10)
+        # Sidebar buttons
+        self.logo_label = ctk.CTkLabel(self.sidebar, text="Main Menu", font=("Segoe UI Bold", 20))
+        self.logo_label.pack(pady=20)
 
-# Tab 1: GZ.Asset to .DAT Converter
-tab1 = tabview.add("GZ.Asset to .DAT")
+        self.converter_button = ctk.CTkButton(self.sidebar, text="Converter", corner_radius=50, command=self.show_converter)
+        self.converter_button.pack(pady=10, padx=10, fill="x")
 
-ctk.CTkLabel(tab1, text="Input Folder:", font=("Segoe UI", 14)).pack(pady=5)
-ctk.CTkEntry(tab1, textvariable=input_folder_var, width=400).pack(pady=5)
-ctk.CTkButton(tab1, text="Browse", command=browse_input_folder).pack(pady=5)
+        self.extractor_button = ctk.CTkButton(self.sidebar, text="Extractor", corner_radius=50, command=self.show_extractor)
+        self.extractor_button.pack(pady=10, padx=10, fill="x")
 
-ctk.CTkLabel(tab1, text="Output Folder:", font=("Segoe UI", 14)).pack(pady=5)
-ctk.CTkEntry(tab1, textvariable=output_folder_var, width=400).pack(pady=5)
-ctk.CTkButton(tab1, text="Browse", command=browse_output_folder).pack(pady=5)
+        # self.settings_button = ctk.CTkButton(self.sidebar, text="Settings", corner_radius=50, command=self.show_settings)
+        # self.settings_button.pack(pady=10, padx=10, fill="x")
 
-ctk.CTkButton(tab1, text="Start Conversion", fg_color="green", command=start_conversion).pack(pady=20)
+        # Bottom version label
+        self.version_label = ctk.CTkLabel(self.sidebar, text="v0.5", font=("Segoe UI", 10))
+        self.version_label.pack(side="bottom", pady=20)
 
-# Tab 2: Unity Asset Bundle Extractor
-tab2 = tabview.add("Unity Asset Extractor")
+        # Content Frame
+        self.content = ctk.CTkFrame(self, corner_radius=0)
+        self.content.pack(side="right", expand=True, fill="both")
 
-ctk.CTkLabel(tab2, text="Unity Asset Bundle Extractor", font=("Segoe UI", 18)).pack(pady=10)
-ctk.CTkButton(tab2, text="Browse Unity Asset File", command=browse_asset_file).pack(pady=20)
+        # Show Converter tab initially
+        self.show_converter()
 
-# Menu Bar Setup (Standard Tkinter Menu)
-menu = Menu(root)
-root.config(menu=menu)
+    def clear_content(self):
+        for widget in self.content.winfo_children():
+            widget.destroy()
 
-file_menu = Menu(menu, tearoff=0)
-menu.add_cascade(label="File", menu=file_menu)
-file_menu.add_command(label="Exit", command=root.quit)
+    def show_converter(self):
+        self.clear_content()
+        ctk.CTkLabel(self.content, text="GZ.Asset to .DAT Converter", font=("Segoe UI", 24)).pack(pady=20)
+        
+        global input_folder_var, output_folder_var
+        input_folder_var = ctk.StringVar()
+        output_folder_var = ctk.StringVar()
 
-help_menu = Menu(menu, tearoff=0)
-menu.add_cascade(label="Help", menu=help_menu)
-help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About", "Unity Asset Extractor & Converter\nVersion 0.3.1 Alpha\nMade by TheDoctorTTV"))
+        ctk.CTkLabel(self.content, text="Input Folder:").pack(pady=5)
+        ctk.CTkEntry(self.content, textvariable=input_folder_var, corner_radius=50, width=400).pack(pady=5)
+        ctk.CTkButton(self.content, text="Browse", corner_radius=50, command=browse_input_folder).pack(pady=5)
 
-# Start the application
-root.mainloop()
+        ctk.CTkLabel(self.content, text="Output Folder:").pack(pady=5)
+        ctk.CTkEntry(self.content, textvariable=output_folder_var, corner_radius=50, width=400).pack(pady=5)
+        ctk.CTkButton(self.content, text="Browse", corner_radius=50, command=browse_output_folder).pack(pady=5)
+        
+        ctk.CTkButton(self.content, text="Start Conversion", corner_radius=50, command=start_conversion).pack(pady=20)
+
+    def show_extractor(self):
+        self.clear_content()
+        ctk.CTkLabel(self.content, text="Unity Asset Bundle Extractor", font=("Segoe UI", 24)).pack(pady=20)
+        
+        ctk.CTkButton(self.content, text="Browse Unity Asset File", corner_radius=50, command=browse_asset_file).pack(pady=10)
+
+    # def show_settings(self):
+    #     self.clear_content()
+    #     ctk.CTkLabel(self.content, text="Settings", font=("Segoe UI", 24)).pack(pady=20)
+    #     ctk.CTkButton(self.content, text="Example Setting 1", corner_radius=50).pack(pady=10)
+    #     ctk.CTkButton(self.content, text="Example Setting 2", corner_radius=50).pack(pady=10)
+
+# Run the application
+if __name__ == "__main__":
+    app = ModernUI()
+    app.mainloop()
