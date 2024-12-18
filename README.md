@@ -13,30 +13,26 @@ This tool allows you to extract and process Unity asset files (such as `.gz.asse
 
 ---
 
-## **Tools Included**
-1. **extract_unity_assets.exe**
-   - Extracts raw Unity asset bundles and saves them for inspection.
-   - Saves all extracted data into an organized folder.
+## **How to Use the Tool**
 
-2. **convert_gz_to_dat.exe**
-   - Converts `.gz.asset` files into `.dat` files for further use.
+### **Step 1: Run the Program**
+1. Run the `BeatSaberMappingExtractor.exe` file.
+2. The GUI will open, and you will see two main options:
+   - **GZ.Asset to .DAT Converter**.
+   - **Unity Asset Extractor**.
 
 ---
 
-## **How to Use the Tools**
-
-### **Step 1: Extract Unity Assets**
-1. Place your **asset bundle file** in the root folder (where the `.exe` files are located).
-2. Run `extract_unity_assets.exe`.
-3. A GUI will open. Press **"Browse File"**.
-4. Locate and open your Unity asset file.
-5. The tool will:
+### **Step 2: Extract Unity Assets**
+1. Select the **"Unity Asset Extractor"** tab.
+2. Press **"Browse File"** and locate your Unity asset file (e.g., `.unity3d`).
+3. The tool will:
    - Extract the raw asset bundle into an `extracted_assets` folder.
    - Save the `raw_asset_bundle.unity3d` file for further use.
 
 ---
 
-### **Step 2: Use AssetStudio to Export Assets**
+### **Step 3: Use AssetStudio to Export Assets**
 1. Download **[AssetStudio](https://github.com/Perfare/AssetStudio)**.
 2. Open `AssetStudioGUI.exe`.
 3. Drag the `raw_asset_bundle.unity3d` file (from the `extracted_assets` folder) into AssetStudio.
@@ -47,12 +43,12 @@ This tool allows you to extract and process Unity asset files (such as `.gz.asse
 
 ---
 
-### **Step 3: Convert `.gz.asset` Files to `.dat` Files**
-1. Run `convert_gz_to_dat.exe`.
-2. When the GUI opens:
-   - Browse for the **"TextAsset"** folder exported by AssetStudio.
-   - Select the folder where you want to save the converted `.dat` files.
-3. The tool will convert all `.gz.asset` files into `.dat` files.
+### **Step 4: Convert `.gz.asset` Files to `.dat` Files**
+1. Select the **"GZ.Asset to .DAT Converter"** tab.
+2. Browse for the **"TextAsset"** folder exported by AssetStudio.
+3. Select the folder where you want to save the converted `.dat` files.
+4. Press **"Start Conversion"**.
+5. The tool will convert all `.gz.asset` files into `.dat` files.
 
 ---
 
