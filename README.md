@@ -1,4 +1,4 @@
-# **Beat Saber Map Extractor Tool**
+# **Beat Saber Mapping Extractor**
 
 This tool allows you to extract and process Unity asset files (such as `.gz.asset`) for Beat Saber maps. It simplifies the process of converting and exporting assets for use or further modification.
 

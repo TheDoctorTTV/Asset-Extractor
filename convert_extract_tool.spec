@@ -5,7 +5,7 @@ a = Analysis(
     ['convert_extract_tool.py'],
     pathex=[],
     binaries=[],
-    datas=[('C:\\Users\\minec\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\UnityPy\\resources', 'UnityPy/resources')],
+    datas=[('C:/Users/minec/AppData/Local/Programs/Python/Python311/Lib/site-packages/UnityPy/resources', 'UnityPy/resources')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
