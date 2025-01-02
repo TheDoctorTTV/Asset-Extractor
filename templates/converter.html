@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Converter</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <h1>GZ.Asset to .DAT Converter</h1>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/converter">Converter</a>
+            <a href="/extractor">Extractor</a>
+        </nav>
+    </header>
+    <main>
+        <form id="converter-form" action="/convert" method="post" enctype="multipart/form-data">
+            <label for="input-files">Select .gz.asset files to convert:</label>
+            <input type="file" id="input-files" name="input_files" multiple>
+            <button type="submit">Start Conversion</button>
+        </form>
+        <div id="result"></div>
+    </main>
+    <script>
+        document.getElementById("converter-form").addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+
+            try {
+                const response = await fetch("/convert", {
+                    method: "POST",
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (response.ok) {
+                    document.getElementById("result").innerHTML = `
+                        <p>${result.message}</p>
+                        <ul>
+                            ${result.files.map(file => `<li>${file}</li>`).join("")}
+                        </ul>
+                    `;
+                } else {
+                    document.getElementById("result").innerHTML = `<p>Error: ${result.error}</p>`;
+                }
+            } catch (error) {
+                document.getElementById("result").innerHTML = `<p>Error: ${error.message}</p>`;
+            }
+        });
+    </script>
+</body>
+</html>

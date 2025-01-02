@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unity Asset Bundle Extractor</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <h1>Unity Asset Bundle Extractor</h1>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/converter">Converter</a>
+            <a href="/extractor">Extractor</a>
+        </nav>
+    </header>
+    <main>
+        <form id="extractor-form" action="/extract" method="post" enctype="multipart/form-data">
+            <label for="asset-file">Select Unity Asset Bundle File:</label>
+            <input type="file" id="asset-file" name="asset_file" required>
+            <button type="submit">Extract</button>
+        </form>
+    </main>
+    <script>
+        document.getElementById("extractor-form").addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+
+            try {
+                const response = await fetch("/extract", {
+                    method: "POST",
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (response.ok) {
+                    alert(result.message); // Show success message
+                } else {
+                    alert("Error: " + result.error); // Show error message
+                }
+            } catch (error) {
+                alert("Error: " + error.message); // Show unexpected error
+            }
+        });
+    </script>
+</body>
+</html>

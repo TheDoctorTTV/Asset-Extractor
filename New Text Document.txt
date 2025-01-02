@@ -1,0 +1,6 @@
+*Sign EXE*
+signtool sign /tr http://timestamp.digicert.com /td SHA256 /fd SHA256 /a /f "G:\OneDrive\Desktop\misc\TheDoctorTTV.cer" /p 6tsh9c59dpr7 "G:\OneDrive\Documents\Beat-Saber-Map-Extractor-Tool\Beat-Saber-Map-Extractor-Tool\dist\Beat Saber Map Extractor.exe"
+
+
+*Build EXE*
+pyinstaller --onefile --windowed --add-data "C:/Users/minec/AppData/Local/Programs/Python/Python311/Lib/site-packages/UnityPy/resources;UnityPy/resources" convert_extract_tool.py
