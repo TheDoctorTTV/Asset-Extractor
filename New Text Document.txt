@@ -4,3 +4,6 @@ signtool sign /tr http://timestamp.digicert.com /td SHA256 /fd SHA256 /a /f "G:\
 
 *Build EXE*
 pyinstaller --onefile --windowed --add-data "C:/Users/minec/AppData/Local/Programs/Python/Python311/Lib/site-packages/UnityPy/resources;UnityPy/resources" convert_extract_tool.py
+
+
+Beat Saber Map Extractor.exe
