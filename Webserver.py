@@ -6,8 +6,16 @@ import magic  # For MIME type detection
 import shutil  # For file copying
 import threading
 import webbrowser
+import requests  # For checking updates
 import customtkinter as ctk
-from tkinter import messagebox 
+from tkinter import messagebox
+from dotenv import load_dotenv
+
+load_dotenv()
+github_token = os.getenv("GITHUB_TOKEN")
+
+# Version number
+VERSION = "v0.6.1"
 
 app = Flask(__name__)
 
@@ -25,10 +33,41 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 def allowed_file(filename, extensions):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in extensions
 
+# Function to check current version
+def get_current_version():
+    return VERSION
+
+# Function to check for updates
+def check_for_updates():
+    try:
+        url = "https://api.github.com/repos/TheDoctor121027/Beat-Saber-Mapping-Extractor/releases/latest"
+        headers = {"Authorization": f"token {os.getenv('GITHUB_TOKEN')}"}
+        response = requests.get(url, headers=headers)
+
+        if response.status_code == 200:
+            latest_release = response.json()
+            latest_version = latest_release["tag_name"]
+            download_url = latest_release["assets"][0]["browser_download_url"]
+
+            if latest_version != VERSION:
+                # Prompt the user to download the update
+                result = messagebox.askyesno(
+                    "Update Available",
+                    f"A new version ({latest_version}) is available. Would you like to download it?"
+                )
+                if result:
+                    webbrowser.open(download_url)
+            else:
+                messagebox.showinfo("Update Status", "You are already using the latest version.")
+        else:
+            messagebox.showwarning("Update Status", f"Failed to check updates: HTTP {response.status_code}")
+    except Exception as e:
+        messagebox.showwarning("Update Status", f"An error occurred while checking for updates: {str(e)}")
+
 # Home route
 @app.route('/')
 def home():
-    return render_template("index.html")
+    return render_template("index.html", version=get_current_version())
 
 # Converter page route
 @app.route('/converter')
@@ -56,7 +95,6 @@ def convert_files():
             file.save(input_path)
 
             try:
-                # Decompress .gz.asset and save as .dat
                 with gzip.open(input_path, "rb") as gz_file:
                     with open(output_path, "wb") as out_file:
                         out_file.write(gz_file.read())
@@ -87,18 +125,16 @@ def extract_files():
 
     return jsonify({"message": "Extraction complete!", "files": [output_file_path]})
 
-
 def start_server():
     app.run(debug=False, port=5500)
 
 def create_ui():
-    # Initialize the CustomTkinter UI
-    ctk.set_appearance_mode("System")  # Options: "System" (default), "Dark", "Light"
-    ctk.set_default_color_theme("blue")  # Options: "blue" (default), "green", "dark-blue"
+    ctk.set_appearance_mode("System")
+    ctk.set_default_color_theme("blue")
 
     root = ctk.CTk()
     root.title("WebServer")
-    root.geometry("300x150")
+    root.geometry("300x200")
     root.resizable(False, False)
 
     def open_link():
@@ -107,19 +143,19 @@ def create_ui():
     def on_close():
         if messagebox.askokcancel("Quit", "Do you want to stop the server and quit?"):
             root.destroy()
-            os._exit(0)  # Ensure the Flask server also shuts down
+            os._exit(0)
+
+    # Automatically check for updates on startup
+    threading.Thread(target=check_for_updates, daemon=True).start()
 
     ctk.CTkLabel(root, text="Webserver is running!", font=("Arial", 14)).pack(pady=10)
     ctk.CTkButton(root, text="Open Web Interface", command=open_link).pack(pady=10)
+    ctk.CTkButton(root, text="Check for Updates", command=check_for_updates).pack(pady=10)
     ctk.CTkButton(root, text="Quit", command=on_close).pack(pady=10)
 
     root.protocol("WM_DELETE_WINDOW", on_close)
     root.mainloop()
 
-
 if __name__ == "__main__":
-    # Start the Flask server in a separate thread
     threading.Thread(target=start_server, daemon=True).start()
-
-    # Start the CustomTkinter UI
     create_ui()
