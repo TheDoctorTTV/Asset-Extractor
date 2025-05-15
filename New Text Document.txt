@@ -1,6 +1,6 @@
 *Sign EXE*
 
-signtool sign /tr http://timestamp.digicert.com /td SHA256 /fd SHA256 /a /f "G:\OneDrive\Desktop\misc\TheDoctorTTV.cer" /p 6tsh9c59dpr7 "G:\OneDrive\Documents\Beat-Saber-Map-Extractor-Tool\Beat-Saber-Map-Extractor-Tool\dist\Beat Saber Map Extractor.exe"
+signtool sign /tr http://timestamp.digicert.com /td SHA256 /fd SHA256 /a /f "G:\OneDrive\Desktop\misc\TheDoctorTTV.cer" /p 6tsh9c59dpr7 "G:\OneDrive\Documents\Beat-Saber-Map-Extractor-Tool\Beat-Saber-Map-Extractor-Tool\dist\BeatSaberMapExtractorV0.6.1.exe"
 
 
 *Build EXE*
