@@ -129,7 +129,7 @@ class ModernUI(ctk.CTk):
         # self.settings_button.pack(pady=10, padx=10, fill="x")
 
         # Bottom version label
-        self.version_label = ctk.CTkLabel(self.sidebar, text="v0.5", font=("Segoe UI", 10))
+        self.version_label = ctk.CTkLabel(self.sidebar, text="v0.5.1", font=("Segoe UI", 10))
         self.version_label.pack(side="bottom", pady=20)
 
         # Content Frame
