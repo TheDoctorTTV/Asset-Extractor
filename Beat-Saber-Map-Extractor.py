@@ -6,6 +6,14 @@ import sys
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 
+
+def resource_path(relative_path):
+    """ Get absolute path to resource (works for dev & for PyInstaller) """
+    if hasattr(sys, '_MEIPASS'):
+        # PyInstaller extracts to _MEIPASS dir
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
 # ----------------- GZ.Asset to .DAT Conversion -----------------
 def convert_files(input_folder, output_folder):
     if not os.path.exists(output_folder):
@@ -91,10 +99,17 @@ class ModernUI(ctk.CTk):
     def __init__(self):
         super().__init__()
         
+        icon_path = resource_path("beat-saber-map-extractor-icon.ico")
+        self.iconbitmap(default=icon_path)
+
+
         # Window properties
         self.title("Beat Saber Mapping Extractor")
-        self.geometry("1000x600")
-        self.resizable(False, False)
+        
+        self.geometry("1000x600")  # Starting size
+        self.minsize(600, 400)    # Minimum size allowed
+        self.resizable(True, True) # Allow resizing (default is True but explicit is good)
+
 
         # Sidebar
         self.sidebar = ctk.CTkFrame(self, width=200, corner_radius=0)

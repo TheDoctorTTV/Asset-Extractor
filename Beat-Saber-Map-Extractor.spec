@@ -5,7 +5,7 @@ a = Analysis(
     ['Beat-Saber-Map-Extractor.py'],
     pathex=[],
     binaries=[],
-    datas=[('C:\\Users\\minec\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\UnityPy\\resources', 'UnityPy\\resources')],
+    datas=[('C:\\Users\\minec\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\UnityPy\\resources', 'UnityPy/resources'), ('G:\\Git Repos\\Beat Saber Mapping Extractor\\beat-saber-map-extractor-icon.ico', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
