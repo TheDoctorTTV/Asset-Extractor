@@ -1,2 +1,25 @@
-convert_gz_to_dat.exe
-extract_unity_assets.exe
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller build folders
+/build/
+/dist/
+/*.spec
+
+# Python virtual environments
+.venv/
+env/
+venv/
+
+# VSCode settings (optional)
+.vscode/
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Logs / temp
+*.log
+*.tmp
