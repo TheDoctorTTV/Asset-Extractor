@@ -2,9 +2,11 @@
 
 mod app;
 mod avatar;
+mod environments;
 mod jobs;
 mod map_info;
 mod settings;
+mod updater;
 
 use eframe::egui;
 

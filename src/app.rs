@@ -2,6 +2,7 @@ use crate::{
     avatar,
     jobs::{self, Destination, Event},
     settings::Settings,
+    updater::Updater,
 };
 use eframe::egui::{self, Color32, RichText};
 use std::{
@@ -40,6 +41,7 @@ struct ExtractionConflict {
 
 pub struct ExtractorApp {
     page: Page,
+    updater: Updater,
     bundle: String,
     settings: Settings,
     draft: Settings,
@@ -84,6 +86,7 @@ impl ExtractorApp {
         }
         Self {
             page: Page::Home,
+            updater: Updater::new(settings.update_channel, settings.update_check_interval),
             bundle: String::new(),
             draft: settings.clone(),
             settings,
@@ -191,7 +194,7 @@ impl ExtractorApp {
     }
 
     fn start(&mut self) {
-        if self.receiver.is_some() || self.conflict.is_some() {
+        if self.receiver.is_some() || self.conflict.is_some() || self.updater.installing {
             return;
         }
         let input = PathBuf::from(self.bundle.trim());
@@ -409,7 +412,15 @@ impl ExtractorApp {
                         } else {
                             egui::Stroke::NONE
                         });
-                if ui.add_sized([width, 38.0], button).clicked() {
+                let response = ui.add_sized([width, 38.0], button);
+                if page == Page::About && self.updater.update_available() {
+                    ui.painter().circle_filled(
+                        response.rect.right_top() + egui::vec2(-10.0, 10.0),
+                        4.0,
+                        Color32::RED,
+                    );
+                }
+                if response.clicked() {
                     self.page = page;
                 }
             }
@@ -577,26 +588,42 @@ impl ExtractorApp {
         if refresh_due {
             self.refresh_avatar();
         }
-        ui.add_space(35.0);
-        ui.vertical_centered(|ui| {
-            ui.set_max_width(600.0);
-            if let Some(texture) = &self.avatar {
-                ui.add(egui::Image::new(texture).fit_to_exact_size(egui::vec2(128.0, 128.0)).rounding(64.0));
-            } else {
-                let (rect, _) = ui.allocate_exact_size(egui::vec2(128.0, 128.0), egui::Sense::hover());
-                ui.painter().circle_filled(rect.center(), 64.0, ACCENT);
-                ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "TD", egui::FontId::proportional(42.0), Color32::WHITE);
-            }
-            ui.add_space(10.0);
-            ui.heading(avatar::USERNAME);
-            ui.hyperlink_to("GitHub profile", avatar::PROFILE_URL);
-            ui.label(RichText::new(&self.avatar_status).color(MUTED));
-            ui.add_space(20.0);
-            ui.label("Beat Saber Mapping Extractor");
-            ui.label("Extract bundle assets and convert compressed map data in one step.");
-            ui.hyperlink_to("Project on GitHub", "https://github.com/TheDoctorTTV/Beat-Saber-Mapping-Extractor");
-            ui.add_space(10.0);
-            ui.small("Uses unity-rs-core for native Unity extraction. Educational use; respect creators’ rights.");
+        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+            ui.add_space(25.0);
+            ui.vertical_centered(|ui| {
+                ui.set_max_width(650.0);
+                if let Some(texture) = &self.avatar {
+                    ui.add(egui::Image::new(texture).fit_to_exact_size(egui::vec2(128.0, 128.0)).rounding(64.0));
+                } else {
+                    let (rect, _) = ui.allocate_exact_size(egui::vec2(128.0, 128.0), egui::Sense::hover());
+                    ui.painter().circle_filled(rect.center(), 64.0, ACCENT);
+                    ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "TD", egui::FontId::proportional(42.0), Color32::WHITE);
+                }
+                ui.add_space(10.0);
+                ui.heading(avatar::USERNAME);
+                ui.hyperlink_to("GitHub profile", avatar::PROFILE_URL);
+                ui.label(RichText::new(&self.avatar_status).color(MUTED));
+                ui.add_space(14.0);
+                ui.label("Beat Saber Mapping Extractor");
+                ui.label("Extract bundle assets and convert compressed map data in one step.");
+                ui.hyperlink_to("Project on GitHub", "https://github.com/TheDoctorTTV/Beat-Saber-Mapping-Extractor");
+                ui.add_space(20.0);
+                ui.separator();
+                ui.add_space(12.0);
+                let preferences_changed = self.updater.show(ui, self.receiver.is_some() || self.conflict.is_some());
+                if preferences_changed {
+                    self.settings.update_channel = self.updater.channel;
+                    self.settings.update_check_interval = self.updater.interval;
+                    self.draft.update_channel = self.updater.channel;
+                    self.draft.update_check_interval = self.updater.interval;
+                    if let Err(err) = self.settings.save() {
+                        self.updater.status = format!("Could not save update preferences: {err}");
+                        self.log(self.updater.status.clone());
+                    }
+                }
+                ui.add_space(20.0);
+                ui.small("Uses unity-rs-core for native Unity extraction. Educational use; respect creators’ rights.");
+            });
         });
     }
 }
@@ -604,6 +631,20 @@ impl ExtractorApp {
 impl eframe::App for ExtractorApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll(ctx);
+        let update_status = self.updater.status.clone();
+        let restart = self.updater.tick(ctx);
+        if self.updater.status != update_status && !self.updater.installing {
+            self.log(format!("Updates: {}", self.updater.status));
+        }
+        if let Some(path) = restart {
+            match std::process::Command::new(path).spawn() {
+                Ok(_) => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+                Err(err) => {
+                    self.updater.status = format!("Update installed. Close and reopen the app to finish; automatic restart failed: {err}");
+                    self.log(self.updater.status.clone());
+                }
+            }
+        }
         if self.receiver.is_some() || self.avatar_receiver.is_some() {
             ctx.request_repaint_after(Duration::from_millis(80));
         }

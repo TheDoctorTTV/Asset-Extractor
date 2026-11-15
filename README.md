@@ -25,6 +25,8 @@ The provided sample’s header identifies UnityFS format 8, Unity 6000.3.19f1. R
 
 Every extraction also writes a v4.0.1 `Info.dat` using the exported filenames for song audio, preview, cover art, audio timing data, difficulty beatmaps, and lightshows. It uses a bundled v4 info file’s song metadata, difficulty settings, credits, environments, and color schemes when available. The bundled original is preserved under a numbered name such as `Info-2.dat`.
 
+For built-in songs, select the original bundle inside the game's `Beat Saber_Data/StreamingAssets/BeatmapLevelsData` folder. Environment settings are stored separately in `StreamingAssets/aa/<platform>/*_pack_assets_all_*.bundle`. The extractor finds the matching level by its ID, resolves characteristic references using the matching shared-assets bundle, and writes each difficulty's environment selection, including overrides and 90°/360° defaults. Keep the sibling `aa` folder present; a copied standalone gameplay bundle does not contain these settings. For example, LFG's pack metadata selects `PrismEnvironment`.
+
 Without a bundled info file, difficulty and characteristic names are inferred from filenames such as `ExpertPlus.beatmap.dat`, `ExpertPlusOneSaber.dat`, or `NoArrowsHard.dat`. Unqualified names use Standard. Matching difficulty lightshows take priority, followed by a characteristic lightshow, `Common.lightshow.dat`, or a single shared lightshow. Ambiguous or missing references are reported in Console. Unknown difficulties are omitted with a warning.
 
 Song duration and initial BPM can be derived from the sample count, sample rate, and first BPM region in the selected AudioData file. The complete timing payload is preserved, including BPM regions and its checksum, and saved as `AudioData.dat`. The generated `Info.dat` references that exact name. This is required for the official editor, whose working-folder copy only includes the literal filename `AudioData.dat`; bundle names such as `LFG.audio.dat` would otherwise be omitted. When metadata is unavailable, the song title falls back to the bundle name, BPM to 120, duration to 0, environment to `DefaultEnvironment`, credits to empty, and jump settings to 0. Console reports missing critical values and inferred difficulty settings. The example’s song-specific BPM, environment, and filenames are not copied into other songs.
@@ -34,6 +36,33 @@ Review warnings before using the result as a song package. This generates the en
 Extraction runs in a worker thread and stages its files before saving a new result folder. Cancellation is checked between decoder stages and during file conversion. A backend decoding stage must finish before cancellation takes effect. Cancelled or failed staging is discarded. The final save uses the chosen folder name. Overwrite keeps the previous extraction until all new assets have been prepared, then moves it to a temporary backup before saving the replacement. If saving fails, the app attempts to restore the previous folder; recovery failures report the preserved backup path in Console. A successful replacement removes the backup. A new-folder destination that appears during decoding is rejected rather than overwritten. Forced termination or power loss can leave staging, backup, or partial output folders. Closing the app requests cancellation but does not wait for the worker to finish.
 
 Default limits include 512 MiB per prepared file and 16 GiB total prepared output, with additional backend limits on parsing, decoding, and object counts. Some large or unsupported assets may produce warnings. Review Console when a result reports warnings.
+
+## App updates
+
+The **About** tab follows Stream247’s app-update workflow:
+
+- Check GitHub Releases at startup, with further checks every hour by default. Choose **Startup only**, hourly, daily, every 48 hours, or weekly. The timer runs while the app is open.
+- Select **Releases** or **Pre-releases**. Each channel lists its own published releases, newest semantic version first. Drafts, invalid version tags, and Python-era versions below 1.0.0 are excluded.
+- A red dot on **About** indicates that the newest release with a compatible binary is newer than the running app. Choosing an older install version does not change that comparison.
+- Use **Check** for a manual check. Choose a version, then **Install & restart**, **Reinstall & restart**, or **Downgrade & restart**. Checks never install automatically. Installation is disabled during extraction.
+- Channel and check interval changes save automatically. Downloads show progress and must match the published size and SHA-256 digest or checksum. The executable’s OS and CPU architecture are checked before replacement.
+
+Updates come only from this project’s public [GitHub Releases](https://github.com/TheDoctorTTV/Beat-Saber-Mapping-Extractor/releases). No GitHub token is needed; GitHub’s public API rate limits apply. Release checks and installs require internet access. If no compatible binary has been published, the app reports that and leaves installation unavailable. In-app installation supports Linux GNU and Windows MSVC builds for x86_64 and aarch64.
+
+Installation replaces the executable at its current location using `self-replace`, then launches the installed version and closes the old app. The executable’s directory must be writable. Settings, extracted assets, and adjacent launcher files are retained. The updater does not install system libraries or update adjacent packaging files. Linux releases must be built against system libraries compatible with the receiving machine. Installation errors preserve a backup when replacement has begun; the error reports its path. A failed automatic restart leaves a message to close and reopen the app. Startup health checks and automatic rollback after launch are not provided.
+
+### Publishing compatible releases
+
+Build each platform using its build script. In addition to the regular `dist/linux` or `dist/windows` output, supported host builds produce a versioned executable and a `.sha256` file under `dist/releases`, for example:
+
+```text
+beat-saber-mapping-extractor-v1.0.0-linux-x86_64
+beat-saber-mapping-extractor-v1.0.0-linux-x86_64.sha256
+beat-saber-mapping-extractor-v1.0.0-windows-x86_64.exe
+beat-saber-mapping-extractor-v1.0.0-windows-x86_64.exe.sha256
+```
+
+Upload both files from each platform to the same GitHub release. The tag must match the `Cargo.toml` package version, optionally prefixed with `v`. For a pre-release, use a version such as `1.1.0-rc.1` and mark the GitHub release as a pre-release. Keep asset names unchanged. Archives and older generic binary names are not installed by this updater. Build scripts only prepare files; they do not create or publish releases.
 
 ## Build on Linux
 
@@ -88,13 +117,14 @@ Each script builds a release binary for the machine running it and copies the ex
 - `src/app.rs`: Home, Console, Settings, About, and worker coordination.
 - `src/jobs.rs`: native Unity export, automatic gzip conversion, and staged saving.
 - `src/map_info.rs`: v4.0.1 Info.dat generation from exported assets and metadata.
-- `src/settings.rs`: persistent output-folder preference.
+- `src/settings.rs`: persistent output-folder and update preferences.
+- `src/updater.rs`: release discovery, scheduled checks, verified downloads, and executable installation.
 - `src/avatar.rs`: GitHub avatar fetching and in-memory image decoding.
 - `build_linux.sh`, `build_windows.ps1`, `build_windows.bat`: native release builds.
 
 ## Credits
 
-Unity parsing and export: [unity-rs-core](https://github.com/seiunx-dev/unity-rs) (MIT). Desktop UI: [egui/eframe](https://github.com/emilk/egui) (MIT/Apache-2.0). See the dependencies and their transitive dependencies for their respective licenses.
+Unity parsing and export: [unity-rs-core](https://github.com/seiunx-dev/unity-rs) (MIT). Desktop UI: [egui/eframe](https://github.com/emilk/egui) (MIT/Apache-2.0). Executable replacement: [self-replace](https://github.com/mitsuhiko/self-replace) (Apache-2.0). See the dependencies and their transitive dependencies for their respective licenses.
 
 ## Disclaimer
 

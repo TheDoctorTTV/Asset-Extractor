@@ -1,3 +1,4 @@
+use crate::environments;
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::{
@@ -321,6 +322,7 @@ pub fn generate(
         }
         // Retain song metadata, not the potentially large note/event arrays.
         let keys = [
+            "m_Name",
             "song",
             "audio",
             "songName",
@@ -447,7 +449,35 @@ pub fn generate(
             warnings.push("Info.dat: song duration unavailable; using 0 seconds.".into());
             0.0
         });
-    let environments = template
+    let level_id = metadata
+        .iter()
+        .find_map(|value| {
+            text(value, &["m_Name"])?
+                .strip_suffix("BeatmapLevelData")
+                .map(str::to_owned)
+        })
+        .unwrap_or_else(|| {
+            bundle
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned()
+        });
+    let companion = if template.is_null() {
+        match environments::load(bundle, &level_id, cancel) {
+            Ok(metadata) => metadata,
+            Err(err) if err.kind() == io::ErrorKind::Interrupted => return Err(err),
+            Err(err) => {
+                warnings.push(format!(
+                    "Info.dat: could not read companion environment metadata: {err}"
+                ));
+                None
+            }
+        }
+    } else {
+        None
+    };
+    let mut environments = template
         .get("environmentNames")
         .and_then(Value::as_array)
         .map(|array| {
@@ -463,10 +493,12 @@ pub fn generate(
                 "environmentName",
                 "_environmentName",
                 "environmentSceneName",
+                "/_environmentName/_environmentName",
             ])
+            .or_else(|| companion.as_ref()?.for_difficulty("Standard", "Easy").map(str::to_owned))
             .unwrap_or_else(|| {
                 warnings.push(
-                    "Info.dat: original environment unavailable; using DefaultEnvironment.".into(),
+                    "Info.dat: original environment unavailable; using DefaultEnvironment. Extract from the game's StreamingAssets/BeatmapLevelsData folder with its sibling aa folder present to recover music-pack environment metadata.".into(),
                 );
                 "DefaultEnvironment".into()
             })]
@@ -519,6 +551,21 @@ pub fn generate(
             ));
         }
         let mut entry = original.cloned().unwrap_or_else(|| json!({}));
+        if original.is_none() {
+            if let Some(environment) = companion
+                .as_ref()
+                .and_then(|metadata| metadata.for_difficulty(&characteristic, &difficulty))
+            {
+                let index = environments
+                    .iter()
+                    .position(|name| name == environment)
+                    .unwrap_or_else(|| {
+                        environments.push(environment.into());
+                        environments.len() - 1
+                    });
+                entry["environmentNameIdx"] = json!(index);
+            }
+        }
         entry["characteristic"] = json!(characteristic);
         entry["difficulty"] = json!(difficulty);
         entry["beatmapDataFilename"] = json!(map);
@@ -617,4 +664,52 @@ pub fn generate(
         warnings,
         audio_data_source,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bundled_v4_info_keeps_nonzero_environment_index() {
+        let folder = tempfile::tempdir().unwrap();
+        let template = json!({
+            "song": {"title": "Test"},
+            "environmentNames": ["DefaultEnvironment", "PrismEnvironment"],
+            "difficultyBeatmaps": [{
+                "characteristic": "Standard", "difficulty": "ExpertPlus",
+                "beatmapDataFilename": "ExpertPlus.dat", "environmentNameIdx": 1
+            }]
+        });
+        std::fs::write(folder.path().join("Info-2.dat"), template.to_string()).unwrap();
+        std::fs::write(folder.path().join("ExpertPlus.dat"), "{}").unwrap();
+        let assets = [
+            ExtractedAsset {
+                filename: "Info-2.dat".into(),
+                original_filename: "Info.dat".into(),
+                class_id: 49,
+                payload_kind: "text_bytes",
+            },
+            ExtractedAsset {
+                filename: "ExpertPlus.dat".into(),
+                original_filename: "ExpertPlus.dat".into(),
+                class_id: 49,
+                payload_kind: "text_bytes",
+            },
+        ];
+        let generated = generate(
+            folder.path(),
+            Path::new("test"),
+            &assets,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        let info: Value = serde_json::from_slice(&generated.bytes).unwrap();
+        assert_eq!(info["environmentNames"], template["environmentNames"]);
+        assert_eq!(info["difficultyBeatmaps"][0]["environmentNameIdx"], 1);
+        assert!(!generated
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("original environment unavailable")));
+    }
 }

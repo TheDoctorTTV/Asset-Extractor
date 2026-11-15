@@ -11,6 +11,8 @@ use std::{
 pub struct Settings {
     pub use_default_folder: bool,
     pub default_folder: String,
+    pub update_channel: crate::updater::Channel,
+    pub update_check_interval: crate::updater::CheckInterval,
 }
 
 pub fn config_dir() -> io::Result<PathBuf> {
