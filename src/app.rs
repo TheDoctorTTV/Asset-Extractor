@@ -698,7 +698,28 @@ impl eframe::App for ExtractorApp {
             self.log(format!("Updates: {}", self.updater.status));
         }
         if let Some(path) = restart {
-            match std::process::Command::new(path).spawn() {
+            let mut command = std::process::Command::new(path);
+            #[cfg(target_os = "linux")]
+            {
+                // The replacement runtime must establish its own AppImage paths.
+                if let Some(app_dir) = std::env::var_os("APPDIR") {
+                    let app_dir = std::path::PathBuf::from(app_dir);
+                    for variable in ["LD_LIBRARY_PATH", "PATH"] {
+                        if let Some(value) = std::env::var_os(variable) {
+                            let paths: Vec<_> = std::env::split_paths(&value)
+                                .filter(|entry| !entry.starts_with(&app_dir))
+                                .collect();
+                            if let Ok(value) = std::env::join_paths(paths) {
+                                command.env(variable, value);
+                            }
+                        }
+                    }
+                }
+                for variable in ["APPIMAGE", "APPDIR", "ARGV0"] {
+                    command.env_remove(variable);
+                }
+            }
+            match command.spawn() {
                 Ok(_) => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
                 Err(err) => {
                     self.updater.status = format!("Update installed. Close and reopen the app to finish; automatic restart failed: {err}");

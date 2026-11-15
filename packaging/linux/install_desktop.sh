@@ -50,7 +50,7 @@ Icon=$app_id
 Terminal=false
 Categories=Utility;
 StartupNotify=true
-StartupWMClass=asset-extractor
+StartupWMClass=$app_id
 EOF
 chmod 644 -- "$desktop_temp"
 mv -f -- "$desktop_temp" "$applications_dir/$app_id.desktop"

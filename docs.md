@@ -56,7 +56,7 @@ Replacement requires a writable executable directory. Settings and extracted fil
 
 ### AppImages and Gear Lever
 
-The executable updater cannot replace the outer AppImage. Use Gear Lever or download a replacement AppImage. At startup, the app checks native and Flatpak Gear Lever configuration for the running AppImage’s registered path. A match hides updater controls and badges and disables built-in checks. Restart after changing registration.
+The built-in updater downloads the `.AppImage` and verifies its size, SHA-256, architecture, and AppImage header. It prepares a replacement beside the outer `APPIMAGE` file, atomically replaces it, and restarts that file. The AppImage’s directory must be writable. Gear Lever or manual replacement are also supported. At startup, the app checks native and Flatpak Gear Lever configuration for the running AppImage’s registered path. A match hides updater controls and badges and disables built-in checks. Restart after changing registration.
 
 AppImages embed an architecture-specific `gh-releases-zsync` source for the latest stable release. This source does not select pre-releases.
 
@@ -110,6 +110,8 @@ The script finds Debian’s versioned LLVM directory automatically when `clang-c
 [cargo-xwin](https://github.com/rust-cross/cargo-xwin) downloads and caches Microsoft’s SDK and CRT on first use; its documented Microsoft license applies. Wine is unnecessary for compilation.
 
 To run both builds inside an existing Distrobox, enter it, change to the repository, and run `./build_all.sh`. Install prerequisites inside that box. The combined script builds Linux first, then Windows, stopping on failure.
+
+On Linux, startup registers the embedded icon and an identity desktop entry matching `io.github.TheDoctorTTV.AssetExtractor` under the user’s data directory. The identity entry references the installed PNG by absolute path and refreshes desktop/icon caches when changed. It is hidden from application menus so Gear Lever can supply its own launcher without duplication.
 
 ## Troubleshooting
 

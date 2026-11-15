@@ -63,7 +63,7 @@ Icon=$app_id
 Terminal=false
 Categories=Utility;
 StartupNotify=true
-StartupWMClass=asset-extractor
+StartupWMClass=$app_id
 EOF
 # Extract the packaging tools when running them, avoiding a build-time FUSE requirement.
 # linuxdeploy bundles eligible shared libraries and supplies the AppRun launcher.

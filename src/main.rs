@@ -2,6 +2,8 @@
 
 mod app;
 mod avatar;
+#[cfg(target_os = "linux")]
+mod desktop;
 mod environments;
 mod jobs;
 mod map_info;
@@ -12,6 +14,10 @@ mod updater;
 use eframe::egui;
 
 fn main() -> eframe::Result<()> {
+    #[cfg(target_os = "linux")]
+    if let Err(error) = desktop::register() {
+        eprintln!("Could not register desktop icon: {error}");
+    }
     let mut viewport = egui::ViewportBuilder::default()
         .with_app_id("io.github.TheDoctorTTV.AssetExtractor")
         .with_inner_size([1105.0, 880.0])

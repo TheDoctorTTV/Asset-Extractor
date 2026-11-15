@@ -75,7 +75,6 @@ struct Asset {
 #[derive(Deserialize)]
 struct ApiRelease {
     tag_name: String,
-    html_url: String,
     draft: bool,
     prerelease: bool,
     assets: Vec<Asset>,
@@ -83,7 +82,6 @@ struct ApiRelease {
 struct Release {
     tag: String,
     version: Version,
-    url: String,
     binary: Option<Asset>,
     checksum: Option<Asset>,
 }
@@ -134,8 +132,7 @@ fn gear_lever_manages_updates() -> bool {
             if app_section {
                 if let Some((key, value)) = line.split_once('=') {
                     if key.trim().eq_ignore_ascii_case("file_path")
-                        && std::fs::canonicalize(value.trim())
-                            .is_ok_and(|path| path == appimage)
+                        && std::fs::canonicalize(value.trim()).is_ok_and(|path| path == appimage)
                     {
                         return true;
                     }
@@ -179,7 +176,7 @@ impl Updater {
             receiver: None,
             installing: false,
             installed: false,
-            status: "Not checked yet".into(),
+            status: "Not checked".into(),
             progress: 0.0,
             checked: false,
             startup: true,
@@ -214,7 +211,7 @@ impl Updater {
             }) {
             Ok(_) => {
                 self.receiver = Some(rx);
-                self.status = "Checking GitHub releases...".into();
+                self.status = "Checking for updates...".into();
                 self.progress = 0.0;
             }
             Err(err) => self.status = format!("Could not check updates: {err}"),
@@ -250,10 +247,16 @@ impl Updater {
                             self.progress = 1.0;
                             self.status = if self.update_available() {
                                 "Update available"
-                            } else if self.releases.iter().any(|r| r.binary.is_some()) {
+                            } else if self
+                                .releases
+                                .first()
+                                .is_some_and(|r| r.version <= current_version())
+                            {
                                 "Up to date"
+                            } else if self.releases.is_empty() {
+                                "No releases available for this channel"
                             } else {
-                                "No installable Rust releases found for this platform and channel"
+                                "No compatible download available"
                             }
                             .into();
                         }
@@ -355,7 +358,7 @@ impl Updater {
         {
             Some(std::cmp::Ordering::Less) => "Downgrade",
             Some(std::cmp::Ordering::Equal) => "Reinstall",
-            _ => "Install",
+            _ => "Update",
         };
         let mut check_clicked = false;
         let mut install_clicked = false;
@@ -372,11 +375,23 @@ impl Updater {
                 check_clicked = ui.add_enabled(!busy, egui::Button::new("Check")).clicked();
             });
         });
-        ui.add(egui::Label::new(&self.status).truncate())
-            .on_hover_text(&self.status);
-        if self.receiver.is_some() || (self.installing && self.progress > 0.0) {
-            ui.add(egui::ProgressBar::new(self.progress).animate(self.receiver.is_some()));
-        }
+        ui.horizontal(|ui| {
+            let color = if self.update_available() {
+                ui.visuals().selection.bg_fill
+            } else {
+                ui.visuals().text_color()
+            };
+            let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
+            ui.painter().circle_filled(rect.center(), 4.0, color);
+            ui.add(egui::Label::new(&self.status).truncate())
+                .on_hover_text(&self.status);
+        });
+        let active = self.receiver.is_some() || self.installing;
+        ui.add(
+            egui::ProgressBar::new(if active { self.progress } else { 0.0 })
+                .desired_height(6.0)
+                .animate(active),
+        );
         ui.add_space(8.0);
         // Match stream247's labeled fields, wrapping whole fields on small windows.
         let field_width = ((ui.available_width() - 24.0) / 3.0)
@@ -403,7 +418,7 @@ impl Updater {
                         let selected = self
                             .releases
                             .get(self.selected)
-                            .map(|r| r.tag.as_str())
+                            .map(|r| r.tag.trim_start_matches(['v', 'V']))
                             .unwrap_or("Check to load versions");
                         egui::ComboBox::from_id_salt("update-version")
                             .width(field_width)
@@ -411,9 +426,9 @@ impl Updater {
                             .show_ui(ui, |ui| {
                                 for (index, release) in self.releases.iter().enumerate() {
                                     let label = if release.binary.is_some() {
-                                        release.tag.clone()
+                                        release.version.to_string()
                                     } else {
-                                        format!("{} (no compatible binary)", release.tag)
+                                        format!("{} (download unavailable)", release.version)
                                     };
                                     ui.selectable_value(&mut self.selected, index, label);
                                 }
@@ -457,9 +472,6 @@ impl Updater {
         if extraction_busy {
             ui.small("Finish or cancel extraction before installing an update.");
         }
-        if let Some(release) = self.releases.get(self.selected) {
-            ui.hyperlink_to("Release notes", &release.url);
-        }
         channel_changed || old_interval != self.interval
     }
 }
@@ -494,7 +506,7 @@ fn asset_name(version: &Version) -> Option<String> {
     Some(format!(
         "asset-extractor-v{version}-{}{}",
         platform_name()?,
-        if cfg!(windows) { ".exe" } else { "" }
+        if cfg!(windows) { ".exe" } else { ".AppImage" }
     ))
 }
 fn client(timeout: Duration) -> Result<reqwest::blocking::Client, reqwest::Error> {
@@ -502,10 +514,7 @@ fn client(timeout: Duration) -> Result<reqwest::blocking::Client, reqwest::Error
         .https_only(true)
         .connect_timeout(Duration::from_secs(10))
         .timeout(timeout)
-        .user_agent(concat!(
-            "AssetExtractor/",
-            env!("CARGO_PKG_VERSION")
-        ))
+        .user_agent(concat!("AssetExtractor/", env!("CARGO_PKG_VERSION")))
         .build()
 }
 fn fetch_releases(channel: Channel) -> Result<Vec<Release>, String> {
@@ -560,7 +569,6 @@ fn fetch_releases(channel: Channel) -> Result<Vec<Release>, String> {
             releases.push(Release {
                 tag: entry.tag_name,
                 version,
-                url: entry.html_url,
                 binary,
                 checksum,
             });
@@ -628,6 +636,14 @@ fn install_binary(
     if expected.len() != 64 || !expected.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(io::Error::other("Invalid SHA-256 checksum"));
     }
+    // AppImage current_exe points into the read-only mounted payload.
+    // APPIMAGE identifies the outer file that must be replaced and restarted.
+    #[cfg(target_os = "linux")]
+    let original = match std::env::var_os("APPIMAGE").filter(|path| !path.is_empty()) {
+        Some(path) => std::fs::canonicalize(path)?,
+        None => std::env::current_exe()?.canonicalize()?,
+    };
+    #[cfg(not(target_os = "linux"))]
     let original = std::env::current_exe()?.canonicalize()?;
     let staging = tempfile::Builder::new()
         .prefix("asset-extractor-update-")
@@ -692,7 +708,7 @@ fn install_binary(
     // replacement can fail after moving the running executable out of the way.
     let backup = tempfile::Builder::new()
         .prefix(".asset-extractor-update-backup-")
-        .suffix(if cfg!(windows) { ".exe" } else { "" })
+        .suffix(if cfg!(windows) { ".exe" } else { ".AppImage" })
         .tempfile_in(
             original
                 .parent()
@@ -701,7 +717,11 @@ fn install_binary(
     std::fs::copy(&original, backup.path())?;
     backup.as_file().sync_all()?;
     check_cancel(cancel)?;
-    if let Err(err) = self_replace::self_replace(&path) {
+    #[cfg(target_os = "linux")]
+    let replacement = replace_linux_appimage(&path, &original);
+    #[cfg(not(target_os = "linux"))]
+    let replacement = self_replace::self_replace(&path);
+    if let Err(err) = replacement {
         let (_, backup_path) = backup.keep().map_err(|keep| keep.error)?;
         if !original.exists() {
             if let Err(restore) = std::fs::copy(&backup_path, &original) {
@@ -715,6 +735,29 @@ fn install_binary(
     }
     Ok(original)
 }
+// Prepare the complete replacement beside the destination, then rename it
+// atomically. The mounted old image remains available until its process exits.
+#[cfg(target_os = "linux")]
+fn replace_linux_appimage(
+    source: &std::path::Path,
+    destination: &std::path::Path,
+) -> io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let parent = destination
+        .parent()
+        .ok_or_else(|| io::Error::other("AppImage has no parent directory"))?;
+    let mut replacement = tempfile::NamedTempFile::new_in(parent)?;
+    let mut source = File::open(source)?;
+    io::copy(&mut source, replacement.as_file_mut())?;
+    let permissions = std::fs::metadata(destination)?.permissions().mode();
+    replacement
+        .as_file()
+        .set_permissions(std::fs::Permissions::from_mode(permissions | 0o111))?;
+    replacement.as_file().sync_all()?;
+    replacement.persist(destination).map_err(|err| err.error)?;
+    Ok(())
+}
+
 fn validate_binary(path: &std::path::Path) -> io::Result<()> {
     let mut file = File::open(path)?;
     let mut header = [0; 64];
@@ -726,9 +769,14 @@ fn validate_binary(path: &std::path::Path) -> io::Result<()> {
         } else {
             62
         };
-        if &header[..4] != b"\x7fELF" || header[4] != 2 || header[5] != 1 || machine != expected {
+        if &header[..4] != b"\x7fELF"
+            || header[4] != 2
+            || header[5] != 1
+            || machine != expected
+            || &header[8..11] != b"AI\x02"
+        {
             return Err(io::Error::other(
-                "Update is not a compatible Linux executable",
+                "Update is not a compatible Linux AppImage",
             ));
         }
     } else if cfg!(target_os = "windows") {

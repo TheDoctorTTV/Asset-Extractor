@@ -15,7 +15,7 @@ The app exports supported assets, expands gzip TextAssets into `.dat` files, and
 
 For built-in Beat Saber songs, open the original bundle under `Beat Saber_Data/StreamingAssets/BeatmapLevelsData`. Keep the sibling `StreamingAssets/aa` folder available so the app can resolve environment settings.
 
-**Settings** offers saved themes and a default output folder. **About** provides release checks and executable updates. AppImages update through Gear Lever or manual replacement; the built-in updater is hidden when Gear Lever registration is detected at startup.
+**Settings** offers saved themes and a default output folder. **About** provides release checks and executable updates. AppImages can update in the app, through Gear Lever, or by manual replacement. The built-in updater is hidden when Gear Lever registration is detected at startup.
 
 ## Build
 
