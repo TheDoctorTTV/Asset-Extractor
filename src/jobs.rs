@@ -1,3 +1,4 @@
+use crate::map_info::{self, ExtractedAsset};
 use flate2::read::MultiGzDecoder;
 use std::{
     collections::HashSet,
@@ -254,6 +255,9 @@ fn extract(
         ("Exporting other assets...", &other_classes),
     ];
     let mut used = HashSet::new();
+    // Preserve a bundled Info.dat under a numbered name; generate the final entry point last.
+    used.insert("info.dat".into());
+    let mut extracted_assets = Vec::new();
     let (mut exported, mut warnings, mut total_bytes) =
         (0_usize, collection.diagnostics.len(), 0_u64);
     for (stage, (label, classes)) in stages.iter().enumerate() {
@@ -340,6 +344,17 @@ fn extract(
                 Ok((name, bytes)) => {
                     exported += 1;
                     total_bytes += bytes;
+                    extracted_assets.push(ExtractedAsset {
+                        filename: name.clone(),
+                        original_filename: record
+                            .output_path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .into_owned(),
+                        class_id: record.class_id,
+                        payload_kind: record.payload_kind,
+                    });
                     let _ = tx.send(Event::Log(format!("Saved: {name} ({bytes} bytes)")));
                 }
                 Err(err) if err.kind() == io::ErrorKind::Interrupted => return Err(err),
@@ -364,6 +379,21 @@ fn extract(
             "No assets could be exported. See Console for details.",
         ));
     }
+    progress(tx, 0.92, "Generating Info.dat...");
+    let info = map_info::generate(&ready, input, &extracted_assets, cancel)?;
+    for warning in info.warnings {
+        warnings += 1;
+        let _ = tx.send(Event::Log(format!("Warning: {warning}")));
+    }
+    save_stream(
+        info.bytes.as_slice(),
+        &ready.join("Info.dat"),
+        cancel,
+        MAX_TOTAL_BYTES
+            .saturating_sub(total_bytes)
+            .min(MAX_FILE_BYTES),
+    )?;
+    let _ = tx.send(Event::Log("Generated: Info.dat (v4.0.1)".into()));
     progress(tx, 0.95, "Saving extracted assets...");
     let name = safe_name(&input.file_name().unwrap_or_default().to_string_lossy());
     // Reserve a fresh output directory; repeated extractions never overwrite previous results.

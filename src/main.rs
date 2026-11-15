@@ -3,6 +3,7 @@
 mod app;
 mod avatar;
 mod jobs;
+mod map_info;
 mod settings;
 
 use eframe::egui;

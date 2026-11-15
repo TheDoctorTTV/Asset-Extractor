@@ -4,16 +4,16 @@ A Rust desktop application for Linux and Windows. Python, UnityPy, and PyInstall
 
 ## Extract in one step
 
-Open **Home**, choose a bundle (including extensionless Beat Saber bundles such as `lfg`), and select **Extract**. Choose a destination when prompted. The app unpacks the bundle, exports its objects, and decompresses gzip TextAssets to `.dat` files automatically. AssetStudio and Python are not required.
+Open **Home**, choose a bundle (including extensionless Beat Saber bundles such as `lfg`), and select **Extract**. Choose a destination when prompted. The app unpacks the bundle, exports its objects, decompresses gzip TextAssets to `.dat` files, and generates `Info.dat` automatically. AssetStudio and Python are not required.
 
 Each extraction creates a folder named after the bundle inside the chosen destination. Repeated extractions use `lfg-2`, `lfg-3`, and so on. Existing extractions are preserved. Filenames are made portable, and collisions receive numbered suffixes.
 
 - **Home:** select a bundle, extract, cancel, and open the result.
 - **Console:** extraction stages, exported filenames, warnings, and a Copy log button. The view retains the latest 2,000 lines.
 - **Settings:** enable a predefined output folder, browse for it, and select **Save settings**. Leave the option off to choose a destination each time.
-- **About:** TheDoctorTTV’s GitHub profile and avatar. The avatar refreshes when About first opens in each app session, then on later visits after an hour, or with **Refresh avatar**. A cached copy is used offline. Only avatar refreshes need internet access.
+- **About:** TheDoctorTTV’s GitHub profile and avatar. The avatar refreshes when About first opens in each app session, then on later visits after an hour, directly from [the GitHub avatar URL](https://avatars.githubusercontent.com/u/39390981?s=96&v=4). No avatar is saved to disk. Only avatar refreshes need internet access.
 
-Settings and the cached avatar are stored in the current user’s application configuration directory, using `directories::ProjectDirs` with organization `TheDoctorTTV` and application `BeatSaberMappingExtractor`.
+Settings are stored in the current user’s application configuration directory, using `directories::ProjectDirs` with organization `TheDoctorTTV` and application `BeatSaberMappingExtractor`.
 
 ## Export support and limits
 
@@ -21,7 +21,15 @@ Native extraction uses [unity-rs-core](https://github.com/seiunx-dev/unity-rs), 
 
 The provided sample’s header identifies UnityFS format 8, Unity 6000.3.19f1. Reading that header does not establish that every object in the sample exports successfully. This change has not been built or runtime tested.
 
-The output contains extracted assets; it does not reconstruct a complete custom Beat Saber song package, synthesize `Info.dat`, or rewrite map/audio references.
+### Generated Info.dat
+
+Every extraction also writes a v4.0.1 `Info.dat` using the exported filenames for song audio, preview, cover art, audio timing data, difficulty beatmaps, and lightshows. It uses a bundled v4 info file’s song metadata, difficulty settings, credits, environments, and color schemes when available. The bundled original is preserved under a numbered name such as `Info-2.dat`.
+
+Without a bundled info file, difficulty and characteristic names are inferred from filenames such as `ExpertPlus.beatmap.dat`, `ExpertPlusOneSaber.dat`, or `NoArrowsHard.dat`. Unqualified names use Standard. Matching difficulty lightshows take priority, followed by a characteristic lightshow, `Common.lightshow.dat`, or a single shared lightshow. Ambiguous or missing references are reported in Console. Unknown difficulties are omitted with a warning.
+
+Song duration and initial BPM can be derived from the sample count, sample rate, and first BPM region in the selected AudioData file. The complete timing file is preserved. When metadata is unavailable, the song title falls back to the bundle name, BPM to 120, duration to 0, environment to `DefaultEnvironment`, credits to empty, and jump settings to 0. Console reports missing critical values and inferred difficulty settings. The example’s song-specific BPM, environment, and filenames are not copied into other songs.
+
+Review warnings before using the result as a song package. This generates the entry point and its file references; it does not restore metadata absent from the bundle or convert unsupported audio/media into playable formats. Schema references: [Info format](https://bsmg.wiki/mapping/map-format/info.html), [Audio timing format](https://bsmg.wiki/mapping/map-format/audio.html).
 
 Extraction runs in a worker thread and stages its files before saving a new result folder. Cancellation is checked between decoder stages and during file conversion. A backend decoding stage must finish before cancellation takes effect. Cancelled or failed staging is discarded. The final save moves completed files into a reserved new folder; ordinary save errors attempt to remove that folder. Forced termination or power loss can leave staging or partial output folders. Closing the app requests cancellation but does not wait for the worker to finish.
 
@@ -71,8 +79,9 @@ Each script builds a release binary for the machine running it and copies the ex
 - `src/main.rs`: desktop entry point and embedded window icon.
 - `src/app.rs`: Home, Console, Settings, About, and worker coordination.
 - `src/jobs.rs`: native Unity export, automatic gzip conversion, and staged saving.
+- `src/map_info.rs`: v4.0.1 Info.dat generation from exported assets and metadata.
 - `src/settings.rs`: persistent output-folder preference.
-- `src/avatar.rs`: GitHub avatar fetching, image decoding, and offline caching.
+- `src/avatar.rs`: GitHub avatar fetching and in-memory image decoding.
 - `build_linux.sh`, `build_windows.ps1`, `build_windows.bat`: native release builds.
 
 ## Credits

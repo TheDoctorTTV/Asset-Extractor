@@ -69,9 +69,6 @@ impl ExtractorApp {
                 format!("Could not load settings: {err}"),
             ),
         };
-        let avatar = avatar::cached()
-            .and_then(|bytes| avatar::decode(&bytes).ok())
-            .map(|image| ctx.load_texture("github-avatar", image, egui::TextureOptions::LINEAR));
         let mut logs = VecDeque::new();
         if !settings_status.is_empty() {
             logs.push_back(settings_status.clone());
@@ -88,7 +85,7 @@ impl ExtractorApp {
             status: "Select a bundle to extract its assets.".into(),
             logs,
             last_output: None,
-            avatar,
+            avatar: None,
             avatar_receiver: None,
             avatar_requested: None,
             avatar_status: String::new(),
@@ -149,19 +146,15 @@ impl ExtractorApp {
                             self.avatar_status = "Avatar updated from GitHub.".into();
                         }
                         Err(err) => {
-                            self.avatar_status = if self.avatar.is_some() {
-                                "Offline — showing saved avatar."
-                            } else {
-                                "Avatar unavailable. Use Refresh to try again."
-                            }
-                            .into();
+                            self.avatar = None;
+                            self.avatar_status = "Avatar unavailable.".into();
                             self.log(format!("GitHub avatar: {err}"));
                         }
                     }
                 }
                 Err(TryRecvError::Disconnected) => {
                     self.avatar_receiver = None;
-                    self.avatar_status = "Avatar refresh stopped. Use Refresh to try again.".into();
+                    self.avatar_status = "Avatar unavailable.".into();
                 }
                 Err(TryRecvError::Empty) => {}
             }
@@ -269,7 +262,7 @@ impl ExtractorApp {
                         })
                         .rounding(22.0)
                         .stroke(if active {
-                            egui::Stroke::new(1.0, Color32::from_rgb(226, 153, 244))
+                            egui::Stroke::new(1.0_f32, Color32::from_rgb(226, 153, 244))
                         } else {
                             egui::Stroke::NONE
                         });
@@ -455,7 +448,6 @@ impl ExtractorApp {
             ui.heading(avatar::USERNAME);
             ui.hyperlink_to("GitHub profile", avatar::PROFILE_URL);
             ui.label(RichText::new(&self.avatar_status).color(MUTED));
-            if ui.add_enabled(self.avatar_receiver.is_none(), egui::Button::new("Refresh avatar")).clicked() { self.refresh_avatar(); }
             ui.add_space(20.0);
             ui.label("Beat Saber Mapping Extractor");
             ui.label("Extract bundle assets and convert compressed map data in one step.");

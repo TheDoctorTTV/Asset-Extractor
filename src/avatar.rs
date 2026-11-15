@@ -1,21 +1,12 @@
-use crate::settings::config_dir;
 use std::{
-    fs,
-    io::{self, Read, Write},
+    io::{self, Read},
     time::Duration,
 };
 
 pub const USERNAME: &str = "TheDoctorTTV";
 pub const PROFILE_URL: &str = "https://github.com/TheDoctorTTV";
+pub const AVATAR_URL: &str = "https://avatars.githubusercontent.com/u/39390981?s=96&v=4";
 const MAX_AVATAR_BYTES: u64 = 4 * 1024 * 1024;
-
-pub fn cached() -> Option<Vec<u8>> {
-    let path = config_dir().ok()?.join("github-avatar");
-    let mut file = fs::File::open(path).ok()?.take(MAX_AVATAR_BYTES + 1);
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes).ok()?;
-    (bytes.len() as u64 <= MAX_AVATAR_BYTES).then_some(bytes)
-}
 
 pub fn decode(bytes: &[u8]) -> Result<eframe::egui::ColorImage, String> {
     let mut reader = image::ImageReader::new(io::Cursor::new(bytes))
@@ -42,7 +33,7 @@ pub fn fetch() -> Result<Vec<u8>, String> {
         ))
         .build()
         .map_err(|err| err.to_string())?
-        .get(format!("https://github.com/{USERNAME}.png?size=192"))
+        .get(AVATAR_URL)
         .send()
         .map_err(|err| err.to_string())?
         .error_for_status()
@@ -56,16 +47,5 @@ pub fn fetch() -> Result<Vec<u8>, String> {
         return Err("Avatar response is too large".into());
     }
     decode(&bytes)?;
-    // A cache write failure must not prevent showing a freshly fetched avatar.
-    if let Ok(directory) = config_dir() {
-        let _ = (|| -> io::Result<()> {
-            fs::create_dir_all(&directory)?;
-            let mut file = tempfile::NamedTempFile::new_in(&directory)?;
-            file.write_all(&bytes)?;
-            file.persist(directory.join("github-avatar"))
-                .map_err(|err| err.error)?;
-            Ok(())
-        })();
-    }
     Ok(bytes)
 }
