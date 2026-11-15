@@ -2,15 +2,30 @@
 
 A Rust desktop application for Linux and Windows. Python, UnityPy, and PyInstaller are no longer required.
 
-## Features
+## Extract in one step
 
-- Convert gzip-compressed `.gz.asset` files into `.dat` files.
-- Save a Unity asset bundle as `raw_asset_bundle.unity3d` for use in AssetStudio.
-- Native file/folder selection, progress, activity logs, cancellation, and opening the output folder.
-- Work runs on a background thread. Page selections and paths stay intact when switching pages.
-- Failed or cancelled writes discard temporary files, preserving existing destination files. Successful writes replace files with the same name.
+Open **Home**, choose a bundle (including extensionless Beat Saber bundles such as `lfg`), and select **Extract**. Choose a destination when prompted. The app unpacks the bundle, exports its objects, and decompresses gzip TextAssets to `.dat` files automatically. AssetStudio and Python are not required.
 
-The extractor copies the original bundle unchanged, matching the previous combined application's behavior. It does not unpack Unity objects, decode textures, or export TextAssets itself. Use [AssetStudio](https://github.com/Perfare/AssetStudio) for that step.
+Each extraction creates a folder named after the bundle inside the chosen destination. Repeated extractions use `lfg-2`, `lfg-3`, and so on. Existing extractions are preserved. Filenames are made portable, and collisions receive numbered suffixes.
+
+- **Home:** select a bundle, extract, cancel, and open the result.
+- **Console:** extraction stages, exported filenames, warnings, and a Copy log button. The view retains the latest 2,000 lines.
+- **Settings:** enable a predefined output folder, browse for it, and select **Save settings**. Leave the option off to choose a destination each time.
+- **About:** TheDoctorTTV’s GitHub profile and avatar. The avatar refreshes when About first opens in each app session, then on later visits after an hour, or with **Refresh avatar**. A cached copy is used offline. Only avatar refreshes need internet access.
+
+Settings and the cached avatar are stored in the current user’s application configuration directory, using `directories::ProjectDirs` with organization `TheDoctorTTV` and application `BeatSaberMappingExtractor`.
+
+## Export support and limits
+
+Native extraction uses [unity-rs-core](https://github.com/seiunx-dev/unity-rs), pinned to version 0.5.0. It reads Unity containers and serialized objects directly. TextAssets retain their bytes; gzip payloads are detected by their signature and expanded into `.dat`. Supported textures export as PNG and supported audio as WAV. Other supported objects use the backend’s automatic export format. Unsupported objects are retained as raw Unity object bytes (`.bin`) where possible, and reported as warnings. Unrecognized audio codecs retain their original audio container. Raw fallback files are not decoded media.
+
+The provided sample’s header identifies UnityFS format 8, Unity 6000.3.19f1. Reading that header does not establish that every object in the sample exports successfully. This change has not been built or runtime tested.
+
+The output contains extracted assets; it does not reconstruct a complete custom Beat Saber song package, synthesize `Info.dat`, or rewrite map/audio references.
+
+Extraction runs in a worker thread and stages its files before saving a new result folder. Cancellation is checked between decoder stages and during file conversion. A backend decoding stage must finish before cancellation takes effect. Cancelled or failed staging is discarded. The final save moves completed files into a reserved new folder; ordinary save errors attempt to remove that folder. Forced termination or power loss can leave staging or partial output folders. Closing the app requests cancellation but does not wait for the worker to finish.
+
+Default limits include 512 MiB per prepared file and 16 GiB total prepared output, with additional backend limits on parsing, decoding, and object counts. Some large or unsupported assets may produce warnings. Review Console when a result reports warnings.
 
 ## Build on Linux
 
@@ -49,23 +64,20 @@ If PowerShell's script execution policy blocks that command, run `build_windows.
 
 Output: `dist/windows/beat-saber-mapping-extractor.exe`. The existing icon is embedded for the application window. The app has no console window on Windows. Binaries are unsigned.
 
-Each script builds a release binary for the machine running it and copies the executable and README into `dist`. Build Linux on Linux and Windows on Windows; these scripts do not configure cross-compilation. They do not run tests or install system dependencies. Cargo downloads dependencies on the first build and generates `Cargo.lock`; keep that lockfile in version control after your first successful build.
-
-## Usage
-
-1. Open **Extractor**, select your Unity bundle and an output folder, then select **Start Extraction**. The default output is `extracted_assets` beside the executable.
-2. Open the saved `raw_asset_bundle.unity3d` in AssetStudio and export its assets.
-3. Open **Converter**, select AssetStudio's exported `TextAsset` folder and a destination folder, then select **Start Conversion**.
-4. Use **Open Output Folder** to see the result. Files are processed directly inside the selected input folder, without recursion. Only names ending in `.gz.asset` are converted.
-
-Cancel stops the active operation between chunks. Completed files are retained; the current incomplete file is discarded. Closing the application also cancels its worker; a forced termination may leave a temporary file. The activity view retains the latest 2,000 lines. Status messages report individual failures and final counts.
+Each script builds a release binary for the machine running it and copies the executable and README into `dist`. Build Linux on Linux and Windows on Windows; these scripts do not configure cross-compilation. They do not run tests or install system dependencies. Cargo downloads dependencies as needed and updates `Cargo.lock` when dependencies change. Keep that lockfile in version control. Use current stable Rust; the extraction backend requires Rust 1.88 or newer and some dependencies may require a newer compiler.
 
 ## Source layout
 
 - `src/main.rs`: desktop entry point and embedded window icon.
-- `src/app.rs`: GUI and background worker coordination.
-- `src/jobs.rs`: streaming gzip conversion and raw bundle copying.
+- `src/app.rs`: Home, Console, Settings, About, and worker coordination.
+- `src/jobs.rs`: native Unity export, automatic gzip conversion, and staged saving.
+- `src/settings.rs`: persistent output-folder preference.
+- `src/avatar.rs`: GitHub avatar fetching, image decoding, and offline caching.
 - `build_linux.sh`, `build_windows.ps1`, `build_windows.bat`: native release builds.
+
+## Credits
+
+Unity parsing and export: [unity-rs-core](https://github.com/seiunx-dev/unity-rs) (MIT). Desktop UI: [egui/eframe](https://github.com/emilk/egui) (MIT/Apache-2.0). See the dependencies and their transitive dependencies for their respective licenses.
 
 ## Disclaimer
 
