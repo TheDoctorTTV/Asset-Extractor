@@ -289,17 +289,17 @@ impl ExtractorApp {
             ui.set_max_width(580.0);
             ui.add_enabled_ui(!busy, |ui| {
                 ui.horizontal(|ui| {
-                    ui.add_sized(
-                        [
-                            410.0_f32.min((ui.available_width() - 150.0).max(150.0)),
-                            38.0,
-                        ],
-                        egui::TextEdit::singleline(&mut self.bundle)
-                            .hint_text("Select a Unity bundle")
-                            .background_color(FIELD)
-                            .text_color(Color32::from_rgb(45, 38, 49))
-                            .margin(egui::vec2(14.0, 9.0)),
-                    );
+                    let field_width = 410.0_f32.min((ui.available_width() - 150.0).max(150.0));
+                    ui.scope(|ui| {
+                        ui.visuals_mut().extreme_bg_color = FIELD;
+                        ui.add_sized(
+                            [field_width, 38.0],
+                            egui::TextEdit::singleline(&mut self.bundle)
+                                .hint_text("Select a Unity bundle")
+                                .text_color(Color32::from_rgb(45, 38, 49))
+                                .margin(egui::vec2(14.0, 9.0)),
+                        );
+                    });
                     if action(ui, "Browse", [135.0, 38.0]).clicked() {
                         if let Some(path) = rfd::FileDialog::new()
                             .set_title("Select a Unity asset bundle")
