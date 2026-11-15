@@ -2,6 +2,7 @@ use crate::{
     avatar,
     jobs::{self, Destination, Event},
     settings::Settings,
+    theme::{self, Theme},
     updater::Updater,
 };
 use eframe::egui::{self, Color32, RichText};
@@ -16,11 +17,6 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-
-const BACKGROUND: Color32 = Color32::from_rgb(73, 62, 77);
-const ACCENT: Color32 = Color32::from_rgb(174, 36, 211);
-const FIELD: Color32 = Color32::from_rgb(220, 220, 220);
-const MUTED: Color32 = Color32::from_rgb(204, 193, 207);
 
 #[derive(Clone, Copy, Default, PartialEq)]
 enum Page {
@@ -61,18 +57,6 @@ pub struct ExtractorApp {
 
 impl ExtractorApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let ctx = &cc.egui_ctx;
-        let mut style = (*ctx.style()).clone();
-        style.visuals = egui::Visuals::dark();
-        style.visuals.panel_fill = BACKGROUND;
-        style.visuals.window_fill = BACKGROUND;
-        style.visuals.extreme_bg_color = Color32::from_rgb(60, 50, 64);
-        style.visuals.override_text_color = Some(Color32::WHITE);
-        style.visuals.selection.bg_fill = ACCENT;
-        style.visuals.hyperlink_color = Color32::from_rgb(231, 179, 247);
-        style.spacing.item_spacing = egui::vec2(10.0, 10.0);
-        style.animation_time = 0.15;
-        ctx.set_style(style);
         let (settings, settings_status) = match Settings::load() {
             Ok(settings) => (settings, String::new()),
             Err(err) => (
@@ -80,6 +64,8 @@ impl ExtractorApp {
                 format!("Could not load settings: {err}"),
             ),
         };
+        theme::install_fonts(&cc.egui_ctx);
+        settings.theme.apply(&cc.egui_ctx);
         let mut logs = VecDeque::new();
         if !settings_status.is_empty() {
             logs.push_back(settings_status.clone());
@@ -339,9 +325,7 @@ impl ExtractorApp {
                     );
                 }
                 if !conflict.error.is_empty() {
-                    ui.label(
-                        RichText::new(&conflict.error).color(Color32::from_rgb(255, 185, 185)),
-                    );
+                    ui.label(RichText::new(&conflict.error).color(ui.visuals().error_fg_color));
                 }
                 if ui.button("Cancel").clicked() {
                     cancel_prompt = true;
@@ -377,21 +361,45 @@ impl ExtractorApp {
     }
 
     fn header(&mut self, ui: &mut egui::Ui) {
-        ui.add_space(10.0);
+        let palette = self.settings.theme.palette();
+        ui.add_space(9.0);
         ui.horizontal(|ui| {
-            let title_width = 420.0;
+            let title_size = if ui.available_width() < 836.0 {
+                38.0
+            } else {
+                48.0
+            };
+            let title_width = ui.fonts(|fonts| {
+                fonts
+                    .layout_no_wrap(
+                        "Asset Extractor".into(),
+                        egui::FontId::proportional(title_size),
+                        Color32::WHITE,
+                    )
+                    .size()
+                    .x
+                    + fonts
+                        .layout_no_wrap(
+                            concat!("v", env!("CARGO_PKG_VERSION")).into(),
+                            egui::FontId::proportional(11.0),
+                            palette.muted,
+                        )
+                        .size()
+                        .x
+            }) + ui.spacing().item_spacing.x;
             ui.add_space(((ui.available_width() - title_width) / 2.0).max(0.0));
-            ui.label(RichText::new("Asset Extractor").size(48.0));
+            ui.label(RichText::new("Asset Extractor").size(title_size));
             ui.label(
                 RichText::new(concat!("v", env!("CARGO_PKG_VERSION")))
                     .size(11.0)
-                    .color(MUTED),
+                    .color(palette.muted),
             );
         });
-        ui.add_space(22.0);
+        ui.add_space(17.0);
         ui.horizontal(|ui| {
-            let width = 135.0;
-            ui.add_space(((ui.available_width() - (width * 4.0 + 30.0)) / 2.0).max(0.0));
+            ui.spacing_mut().item_spacing.x = 15.0;
+            let width = 111.0_f32.min(((ui.available_width() - 45.0) / 4.0).max(60.0));
+            ui.add_space(((ui.available_width() - (width * 4.0 + 45.0)) / 2.0).max(0.0));
             for (page, label) in [
                 (Page::Home, "Home"),
                 (Page::Console, "Console"),
@@ -399,25 +407,12 @@ impl ExtractorApp {
                 (Page::About, "About"),
             ] {
                 let active = self.page == page;
-                let button =
-                    egui::Button::new(RichText::new(label).size(23.0).color(Color32::WHITE))
-                        .fill(if active {
-                            ACCENT
-                        } else {
-                            Color32::from_rgb(145, 37, 173)
-                        })
-                        .rounding(22.0)
-                        .stroke(if active {
-                            egui::Stroke::new(1.0_f32, Color32::from_rgb(226, 153, 244))
-                        } else {
-                            egui::Stroke::NONE
-                        });
-                let response = ui.add_sized([width, 38.0], button);
+                let response = theme::button(ui, label, [width, 36.0], active, 12.0);
                 if page == Page::About && self.updater.update_available() {
                     ui.painter().circle_filled(
                         response.rect.right_top() + egui::vec2(-10.0, 10.0),
                         4.0,
-                        Color32::RED,
+                        ui.visuals().error_fg_color,
                     );
                 }
                 if response.clicked() {
@@ -425,29 +420,29 @@ impl ExtractorApp {
                 }
             }
         });
-        ui.add_space(2.0);
-        ui.separator();
+        ui.add_space(17.0);
+        let (rect, _) =
+            ui.allocate_exact_size(egui::vec2(ui.available_width(), 2.0), egui::Sense::hover());
+        ui.painter().rect_filled(rect, 0.0, palette.border);
     }
 
     fn home(&mut self, ui: &mut egui::Ui) {
+        let palette = self.settings.theme.palette();
         let busy = self.receiver.is_some();
-        ui.add_space((ui.available_height() * 0.24).clamp(30.0, 155.0));
+        ui.add_space(55.0);
         ui.vertical_centered(|ui| {
-            ui.set_max_width(580.0);
-            ui.add_enabled_ui(!busy, |ui| {
+            ui.set_max_width(818.0);
+            ui.add_enabled_ui(!busy && !self.updater.installing, |ui| {
+                ui.label("Unity asset bundle");
                 ui.horizontal(|ui| {
-                    let field_width = 410.0_f32.min((ui.available_width() - 150.0).max(150.0));
-                    ui.scope(|ui| {
-                        ui.visuals_mut().extreme_bg_color = FIELD;
-                        ui.add_sized(
-                            [field_width, 38.0],
-                            egui::TextEdit::singleline(&mut self.bundle)
-                                .hint_text("Select a Unity bundle")
-                                .text_color(Color32::from_rgb(45, 38, 49))
-                                .margin(egui::vec2(14.0, 9.0)),
-                        );
-                    });
-                    if action(ui, "Browse", [135.0, 38.0]).clicked() {
+                    let field_width = (ui.available_width() - 147.0).max(150.0);
+                    ui.add_sized(
+                        [field_width, 38.0],
+                        egui::TextEdit::singleline(&mut self.bundle)
+                            .hint_text("Select a Unity bundle")
+                            .margin(egui::vec2(16.0, 9.0)),
+                    );
+                    if theme::button(ui, "Browse", [135.0, 38.0], false, 13.0).clicked() {
                         if let Some(path) = rfd::FileDialog::new()
                             .set_title("Select a Unity asset bundle")
                             .pick_file()
@@ -456,8 +451,8 @@ impl ExtractorApp {
                         }
                     }
                 });
-                ui.add_space(5.0);
-                if action(ui, "Extract", [145.0, 38.0]).clicked() {
+                ui.add_space(26.0);
+                if action(ui, "Extract", [180.0, 58.0]).clicked() {
                     self.start();
                 }
             });
@@ -465,13 +460,13 @@ impl ExtractorApp {
             if busy {
                 ui.add(
                     egui::ProgressBar::new(self.progress)
-                        .fill(ACCENT)
+                        .fill(palette.primary)
                         .animate(true)
                         .desired_width(400.0),
                 );
                 ui.spinner();
             }
-            ui.label(RichText::new(&self.status).color(MUTED));
+            ui.label(RichText::new(&self.status).color(palette.muted));
             if busy {
                 if ui
                     .add_enabled(
@@ -501,6 +496,7 @@ impl ExtractorApp {
     }
 
     fn console(&mut self, ui: &mut egui::Ui) {
+        let palette = self.settings.theme.palette();
         ui.add_space(18.0);
         ui.horizontal(|ui| {
             ui.heading("Console");
@@ -518,23 +514,59 @@ impl ExtractorApp {
         });
         ui.label(&self.status);
         ui.add_space(6.0);
-        egui::ScrollArea::vertical()
-            .stick_to_bottom(true)
-            .auto_shrink([false, false])
+        egui::Frame::none()
+            .fill(palette.surface)
+            .rounding(16.0)
+            .inner_margin(20.0)
             .show(ui, |ui| {
-                if self.logs.is_empty() {
-                    ui.label(RichText::new("Extraction activity will appear here.").color(MUTED));
-                }
-                for line in &self.logs {
-                    ui.monospace(line);
-                }
+                egui::ScrollArea::vertical()
+                    .stick_to_bottom(true)
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        if self.logs.is_empty() {
+                            ui.label(
+                                RichText::new("Extraction activity will appear here.")
+                                    .color(palette.muted),
+                            );
+                        }
+                        for line in &self.logs {
+                            ui.monospace(line);
+                        }
+                    });
             });
     }
 
     fn settings_page(&mut self, ui: &mut egui::Ui) {
-        ui.add_space(55.0);
+        let palette = self.settings.theme.palette();
+        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+        ui.add_space(32.0);
         ui.vertical_centered(|ui| {
-            ui.set_max_width(580.0);
+            ui.set_max_width(818.0);
+            ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+            ui.heading("Settings");
+            ui.label("Theme");
+            let previous = self.draft.theme;
+            egui::ComboBox::from_id_salt("theme")
+                .selected_text(self.draft.theme.label())
+                .width(240.0)
+                .show_ui(ui, |ui| {
+                    for theme in Theme::ALL {
+                        ui.selectable_value(&mut self.draft.theme, theme, theme.label());
+                    }
+                });
+            if self.draft.theme != previous {
+                self.settings.theme = self.draft.theme;
+                self.settings.theme.apply(ui.ctx());
+                ui.ctx().request_repaint();
+                self.settings_status = match self.settings.save() {
+                    Ok(()) => "Theme saved.".into(),
+                    Err(err) => format!("Theme applied, but could not save it: {err}"),
+                };
+            }
+            ui.small("Theme changes apply and save automatically.");
+            ui.add_space(18.0);
+            ui.separator();
+            ui.add_space(12.0);
             ui.heading("Save location");
             ui.add_space(12.0);
             ui.checkbox(
@@ -564,7 +596,7 @@ impl ExtractorApp {
             });
             ui.label(
                 RichText::new("Leave this off to choose a destination for each extraction.")
-                    .color(MUTED),
+                    .color(palette.muted),
             );
             ui.small("Each bundle gets its own folder. Existing folders prompt for a new name or overwrite.");
             ui.add_space(14.0);
@@ -578,10 +610,13 @@ impl ExtractorApp {
                 }
             }
             ui.label(&self.settings_status);
+            });
+        });
         });
     }
 
     fn about(&mut self, ui: &mut egui::Ui) {
+        let palette = self.settings.theme.palette();
         let refresh_due = self
             .avatar_requested
             .map_or(true, |time| time.elapsed() >= Duration::from_secs(3600));
@@ -596,13 +631,13 @@ impl ExtractorApp {
                     ui.add(egui::Image::new(texture).fit_to_exact_size(egui::vec2(128.0, 128.0)).rounding(64.0));
                 } else {
                     let (rect, _) = ui.allocate_exact_size(egui::vec2(128.0, 128.0), egui::Sense::hover());
-                    ui.painter().circle_filled(rect.center(), 64.0, ACCENT);
+                    ui.painter().circle_filled(rect.center(), 64.0, palette.primary);
                     ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "TD", egui::FontId::proportional(42.0), Color32::WHITE);
                 }
                 ui.add_space(10.0);
                 ui.heading(avatar::USERNAME);
                 ui.hyperlink_to("GitHub profile", avatar::PROFILE_URL);
-                ui.label(RichText::new(&self.avatar_status).color(MUTED));
+                ui.label(RichText::new(&self.avatar_status).color(palette.muted));
                 ui.add_space(14.0);
                 ui.label("Beat Saber Mapping Extractor");
                 ui.label("Extract bundle assets and convert compressed map data in one step.");
@@ -648,21 +683,27 @@ impl eframe::App for ExtractorApp {
         if self.receiver.is_some() || self.avatar_receiver.is_some() {
             ctx.request_repaint_after(Duration::from_millis(80));
         }
+        let palette = self.settings.theme.palette();
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::none()
-                    .fill(BACKGROUND)
-                    .inner_margin(egui::Margin::symmetric(28.0, 14.0)),
+                    .fill(palette.background)
+                    .inner_margin(egui::Margin::symmetric(32.0, 14.0)),
             )
             .show(ctx, |ui| {
-                ui.add_enabled_ui(self.conflict.is_none(), |ui| {
-                    self.header(ui);
-                    match self.page {
-                        Page::Home => self.home(ui),
-                        Page::Console => self.console(ui),
-                        Page::Settings => self.settings_page(ui),
-                        Page::About => self.about(ui),
-                    }
+                ui.vertical_centered(|ui| {
+                    ui.set_max_width(978.0);
+                    ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                        ui.add_enabled_ui(self.conflict.is_none(), |ui| {
+                            self.header(ui);
+                            match self.page {
+                                Page::Home => self.home(ui),
+                                Page::Console => self.console(ui),
+                                Page::Settings => self.settings_page(ui),
+                                Page::About => self.about(ui),
+                            }
+                        });
+                    });
                 });
             });
         self.conflict_prompt(ctx);
@@ -676,11 +717,11 @@ impl Drop for ExtractorApp {
 }
 
 fn action(ui: &mut egui::Ui, label: &str, size: [f32; 2]) -> egui::Response {
-    ui.add_sized(
+    theme::button(
+        ui,
+        label,
         size,
-        egui::Button::new(RichText::new(label).size(23.0).color(Color32::WHITE))
-            .fill(ACCENT)
-            .rounding(22.0)
-            .stroke(egui::Stroke::NONE),
+        true,
+        if size[1] >= 50.0 { 23.0 } else { 13.0 },
     )
 }

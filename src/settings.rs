@@ -9,6 +9,7 @@ use std::{
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    pub theme: crate::theme::Theme,
     pub use_default_folder: bool,
     pub default_folder: String,
     pub update_channel: crate::updater::Channel,

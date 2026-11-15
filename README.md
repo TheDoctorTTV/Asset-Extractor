@@ -10,8 +10,10 @@ Each extraction creates a folder named after the bundle inside the chosen destin
 
 - **Home:** select a bundle, extract, cancel, and open the result.
 - **Console:** extraction stages, exported filenames, warnings, and a Copy log button. The view retains the latest 2,000 lines.
-- **Settings:** enable a predefined output folder, browse for it, and select **Save settings**. Leave the option off to choose a destination each time.
+- **Settings:** choose a theme or configure a predefined output folder. Themes apply immediately and save automatically; output-folder changes use **Save settings**. Leave the folder option off to choose a destination each time.
 - **About:** TheDoctorTTV’s GitHub profile and avatar. The avatar refreshes when About first opens in each app session, then on later visits after an hour, directly from [the GitHub avatar URL](https://avatars.githubusercontent.com/u/39390981?s=96&v=4). No avatar is saved to disk. Only avatar refreshes need internet access.
+
+The interface follows stream247’s styling: pill-shaped controls, soft shadows, compact typography, and matching dark palettes. Theme choices are Amber, Amethyst (default), Cobalt, Ember, Evergreen, Graphite, Lagoon, Rose Quartz, and Ruby. The saved theme is restored when the app opens.
 
 Settings are stored in the current user’s application configuration directory, using `directories::ProjectDirs` with organization `TheDoctorTTV` and application `BeatSaberMappingExtractor`.
 
