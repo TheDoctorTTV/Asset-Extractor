@@ -19,6 +19,34 @@ use unity_rs_core::{
 const MAX_FILE_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_TOTAL_BYTES: u64 = 16 * 1024 * 1024 * 1024;
 
+pub struct Destination {
+    pub folder_name: String,
+    pub overwrite: bool,
+}
+
+pub fn bundle_folder_name(input: &Path) -> String {
+    safe_name(&input.file_name().unwrap_or_default().to_string_lossy())
+}
+
+pub fn validate_folder_name(name: &str) -> io::Result<()> {
+    if name.is_empty() || name.trim() != name || safe_name(name) != name {
+        Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Enter a folder name without path separators, reserved names, or trailing spaces.",
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+pub fn destination_exists(path: &Path) -> io::Result<bool> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(err) => Err(err),
+    }
+}
+
 pub enum Event {
     Log(String),
     Progress(f32, String),
@@ -183,10 +211,16 @@ fn prepare_asset(
     Ok((name, size))
 }
 
-pub fn run(input: PathBuf, output: PathBuf, tx: Sender<Event>, cancel: Arc<AtomicBool>) {
+pub fn run(
+    input: PathBuf,
+    output: PathBuf,
+    destination: Destination,
+    tx: Sender<Event>,
+    cancel: Arc<AtomicBool>,
+) {
     // Keep decoder panics from leaving the UI permanently busy.
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        extract(&input, &output, &tx, &cancel)
+        extract(&input, &output, &destination, &tx, &cancel)
     }));
     let (status, output) = match result {
         Ok(Ok((status, output))) => (status, Some(output)),
@@ -206,6 +240,7 @@ pub fn run(input: PathBuf, output: PathBuf, tx: Sender<Event>, cancel: Arc<Atomi
 fn extract(
     input: &Path,
     output: &Path,
+    target: &Destination,
     tx: &Sender<Event>,
     cancel: &AtomicBool,
 ) -> io::Result<(String, PathBuf)> {
@@ -215,6 +250,26 @@ fn extract(
     }
     fs::create_dir_all(output)?;
     let output = fs::canonicalize(output)?;
+    validate_folder_name(&target.folder_name)?;
+    let destination = output.join(&target.folder_name);
+    if target.overwrite && destination_exists(&destination)? {
+        let metadata = fs::symlink_metadata(&destination)?;
+        if !metadata.is_dir() || metadata.file_type().is_symlink() {
+            return Err(io::Error::other(
+                "Only an existing directory can be overwritten; choose a new folder name.",
+            ));
+        }
+        if fs::canonicalize(input)?.starts_with(fs::canonicalize(&destination)?) {
+            return Err(io::Error::other(
+                "The input bundle is inside the destination; choose a new folder to preserve it.",
+            ));
+        }
+    } else if destination_exists(&destination)? {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "The destination already exists. Extract again to choose a new name or overwrite.",
+        ));
+    }
     let staging = tempfile::Builder::new()
         .prefix(".asset-extractor-")
         .tempdir_in(&output)?;
@@ -257,6 +312,8 @@ fn extract(
     let mut used = HashSet::new();
     // Preserve a bundled Info.dat under a numbered name; generate the final entry point last.
     used.insert("info.dat".into());
+    // Reserve the editor's required timing filename before assigning exported asset names.
+    used.insert(map_info::AUDIO_DATA_FILENAME.to_lowercase());
     let mut extracted_assets = Vec::new();
     let (mut exported, mut warnings, mut total_bytes) =
         (0_usize, collection.diagnostics.len(), 0_u64);
@@ -385,6 +442,18 @@ fn extract(
         warnings += 1;
         let _ = tx.send(Event::Log(format!("Warning: {warning}")));
     }
+    if let Some(source) = &info.audio_data_source {
+        cancelled(cancel)?;
+        // Rename only: preserve the complete timing payload, BPM regions, and checksum.
+        fs::rename(
+            ready.join(source),
+            ready.join(map_info::AUDIO_DATA_FILENAME),
+        )?;
+        let _ = tx.send(Event::Log(format!(
+            "Audio timing: {source} -> {} (editor-compatible filename)",
+            map_info::AUDIO_DATA_FILENAME
+        )));
+    }
     save_stream(
         info.bytes.as_slice(),
         &ready.join("Info.dat"),
@@ -395,42 +464,93 @@ fn extract(
     )?;
     let _ = tx.send(Event::Log("Generated: Info.dat (v4.0.1)".into()));
     progress(tx, 0.95, "Saving extracted assets...");
-    let name = safe_name(&input.file_name().unwrap_or_default().to_string_lossy());
-    // Reserve a fresh output directory; repeated extractions never overwrite previous results.
-    let mut index = 1;
-    let destination = loop {
-        cancelled(cancel)?;
-        let candidate = output.join(if index == 1 {
-            name.clone()
-        } else {
-            format!("{name}-{index}")
-        });
-        match fs::create_dir(&candidate) {
-            Ok(()) => break candidate,
-            Err(err) if err.kind() == io::ErrorKind::AlreadyExists => index += 1,
-            Err(err) => return Err(err),
-        }
-    };
-    // Move completed files into our reserved folder. Windows cannot rename a directory
-    // over an existing empty directory. Roll back this new folder on publication failure.
-    let published = (|| -> io::Result<()> {
-        for entry in fs::read_dir(&ready)? {
-            let entry = entry?;
-            fs::rename(entry.path(), destination.join(entry.file_name()))?;
-        }
-        Ok(())
-    })();
-    if let Err(err) = published {
-        if let Err(cleanup) = fs::remove_dir_all(&destination) {
-            let _ = tx.send(Event::Log(format!(
-                "Could not remove incomplete output {}: {cleanup}",
-                destination.display()
-            )));
-        }
-        return Err(err);
+    cancelled(cancel)?;
+    if let Some(warning) = publish(&ready, &destination, target.overwrite, tx)? {
+        warnings += 1;
+        let _ = tx.send(Event::Log(format!("Warning: {warning}")));
     }
     let status = format!("Done: {exported} assets extracted, {warnings} warnings");
     progress(tx, 1.0, &status);
     let _ = tx.send(Event::Log(format!("Saved to: {}", destination.display())));
     Ok((status, destination))
+}
+
+// The previous directory is moved aside only after decoding and preparation succeed.
+// Its backup is persisted before moving data so a panic cannot drop the old extraction.
+fn publish(
+    ready: &Path,
+    destination: &Path,
+    overwrite: bool,
+    tx: &Sender<Event>,
+) -> io::Result<Option<String>> {
+    let backup = if destination_exists(destination)? {
+        if !overwrite {
+            return Err(io::Error::new(io::ErrorKind::AlreadyExists,
+                "The destination appeared during extraction. Extract again to choose how to handle it."));
+        }
+        let metadata = fs::symlink_metadata(destination)?;
+        if !metadata.is_dir() || metadata.file_type().is_symlink() {
+            return Err(io::Error::other(
+                "The destination is no longer a regular directory; it was not overwritten.",
+            ));
+        }
+        let backup = tempfile::Builder::new()
+            .prefix(".asset-extractor-backup-")
+            .tempdir_in(
+                destination
+                    .parent()
+                    .ok_or_else(|| io::Error::other("Missing destination parent"))?,
+            )?
+            .keep();
+        if let Err(err) = fs::rename(destination, backup.join("previous")) {
+            let _ = fs::remove_dir(&backup);
+            return Err(err);
+        }
+        let _ = tx.send(Event::Log(format!(
+            "Previous extraction backed up at: {}",
+            backup.join("previous").display()
+        )));
+        Some(backup)
+    } else {
+        None
+    };
+    let mut created = false;
+    let result = (|| -> io::Result<()> {
+        fs::create_dir(destination)?;
+        created = true;
+        for entry in fs::read_dir(ready)? {
+            let entry = entry?;
+            fs::rename(entry.path(), destination.join(entry.file_name()))?;
+        }
+        Ok(())
+    })();
+    if let Err(err) = result {
+        if created {
+            if let Err(cleanup) = fs::remove_dir_all(destination) {
+                return Err(io::Error::other(format!(
+                    "Save failed: {err}. Could not remove incomplete output {}: {cleanup}. Previous extraction backup: {}",
+                    destination.display(), backup.as_ref().map(|p| p.join("previous").display().to_string()).unwrap_or_else(|| "none".into())
+                )));
+            }
+        }
+        if let Some(backup) = &backup {
+            if let Err(restore) = fs::rename(backup.join("previous"), destination) {
+                return Err(io::Error::other(format!(
+                    "Save failed: {err}. Could not restore the previous extraction: {restore}. It is preserved at {}",
+                    backup.join("previous").display()
+                )));
+            }
+            let _ = fs::remove_dir(backup);
+        }
+        return Err(err);
+    }
+    if let Some(backup) = backup {
+        if let Err(err) = fs::remove_dir_all(&backup) {
+            return Ok(Some(format!(
+                "Extraction saved, but the previous backup could not be removed: {} ({err})",
+                backup.display()
+            )));
+        }
+    }
+    Ok(None)
 }

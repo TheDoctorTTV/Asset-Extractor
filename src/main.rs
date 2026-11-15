@@ -10,6 +10,7 @@ use eframe::egui;
 
 fn main() -> eframe::Result<()> {
     let mut viewport = egui::ViewportBuilder::default()
+        .with_app_id("io.github.TheDoctorTTV.BeatSaberMappingExtractor")
         .with_inner_size([1105.0, 880.0])
         .with_min_inner_size([720.0, 600.0]);
     if let Ok(icon) = image::load_from_memory_with_format(

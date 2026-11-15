@@ -14,4 +14,11 @@ cargo build --release --target-dir "$PWD/target"
 mkdir -p dist/linux
 install -m 755 target/release/beat-saber-mapping-extractor dist/linux/beat-saber-mapping-extractor
 cp README.md dist/linux/README.md
+cp assets/io.github.TheDoctorTTV.BeatSaberMappingExtractor.png dist/linux/
+install -m 755 packaging/linux/install_desktop.sh dist/linux/install_desktop.sh
+if [[ "${INSTALL_DESKTOP_ENTRY:-1}" != 0 ]]; then
+    if ! bash dist/linux/install_desktop.sh; then
+        echo "Desktop registration failed; the binary was built. Rerun dist/linux/install_desktop.sh to register the icon." >&2
+    fi
+fi
 echo "Built: $PWD/dist/linux/beat-saber-mapping-extractor"

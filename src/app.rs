@@ -1,6 +1,6 @@
 use crate::{
     avatar,
-    jobs::{self, Event},
+    jobs::{self, Destination, Event},
     settings::Settings,
 };
 use eframe::egui::{self, Color32, RichText};
@@ -30,6 +30,14 @@ enum Page {
     About,
 }
 
+struct ExtractionConflict {
+    input: PathBuf,
+    output: PathBuf,
+    existing_folder_name: String,
+    new_folder_name: String,
+    error: String,
+}
+
 pub struct ExtractorApp {
     page: Page,
     bundle: String,
@@ -37,6 +45,7 @@ pub struct ExtractorApp {
     draft: Settings,
     settings_status: String,
     receiver: Option<Receiver<Event>>,
+    conflict: Option<ExtractionConflict>,
     cancel: Arc<AtomicBool>,
     progress: f32,
     status: String,
@@ -80,6 +89,7 @@ impl ExtractorApp {
             settings,
             settings_status,
             receiver: None,
+            conflict: None,
             cancel: Arc::new(AtomicBool::new(false)),
             progress: 0.0,
             status: "Select a bundle to extract its assets.".into(),
@@ -181,6 +191,9 @@ impl ExtractorApp {
     }
 
     fn start(&mut self) {
+        if self.receiver.is_some() || self.conflict.is_some() {
+            return;
+        }
         let input = PathBuf::from(self.bundle.trim());
         if self.bundle.trim().is_empty() || !input.is_file() {
             self.status = "Choose an existing bundle file first.".into();
@@ -202,14 +215,54 @@ impl ExtractorApp {
             self.status = "Choose a default output folder in Settings.".into();
             return;
         }
+        let folder_name = jobs::bundle_folder_name(&input);
+        match jobs::destination_exists(&output.join(&folder_name)) {
+            Ok(true) => {
+                let mut index = 2;
+                let mut suggested_base = folder_name.clone();
+                while suggested_base.len() > 170 {
+                    suggested_base.pop();
+                }
+                let new_folder_name = loop {
+                    let name = format!("{suggested_base}-{index}");
+                    match jobs::destination_exists(&output.join(&name)) {
+                        Ok(false) => break name,
+                        Ok(true) => index += 1,
+                        Err(err) => {
+                            self.status = format!("Could not check the destination: {err}");
+                            return;
+                        }
+                    }
+                };
+                self.conflict = Some(ExtractionConflict {
+                    input,
+                    output,
+                    existing_folder_name: folder_name,
+                    new_folder_name,
+                    error: String::new(),
+                });
+            }
+            Ok(false) => self.launch(
+                input,
+                output,
+                Destination {
+                    folder_name,
+                    overwrite: false,
+                },
+            ),
+            Err(err) => self.status = format!("Could not check the destination: {err}"),
+        }
+    }
+
+    fn launch(&mut self, input: PathBuf, output: PathBuf, destination: Destination) {
         self.cancel = Arc::new(AtomicBool::new(false));
         let cancel = Arc::clone(&self.cancel);
         let (tx, rx) = mpsc::channel();
         let input_label = input.display().to_string();
-        let output_label = output.display().to_string();
+        let output_label = output.join(&destination.folder_name).display().to_string();
         match thread::Builder::new()
             .name("asset-extractor".into())
-            .spawn(move || jobs::run(input, output, tx, cancel))
+            .spawn(move || jobs::run(input, output, destination, tx, cancel))
         {
             Ok(_) => {
                 self.receiver = Some(rx);
@@ -219,6 +272,96 @@ impl ExtractorApp {
                 self.log(format!("Destination: {output_label}"));
             }
             Err(err) => self.status = format!("Could not start extraction: {err}"),
+        }
+    }
+
+    fn conflict_prompt(&mut self, ctx: &egui::Context) {
+        let Some(mut conflict) = self.conflict.take() else {
+            return;
+        };
+        let mut open = true;
+        let mut choice = None;
+        let mut cancel_prompt = false;
+        let previous = conflict.output.join(&conflict.existing_folder_name);
+        let can_overwrite = std::fs::symlink_metadata(&previous)
+            .map(|meta| meta.is_dir() && !meta.file_type().is_symlink())
+            .unwrap_or(false);
+        egui::Window::new("Extraction already exists")
+            .id(egui::Id::new("extraction-conflict"))
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                ui.label("This destination already exists:");
+                ui.label(previous.display().to_string());
+                ui.add_space(8.0);
+                ui.label("Save in a new folder:");
+                ui.add(
+                    egui::TextEdit::singleline(&mut conflict.new_folder_name).desired_width(350.0),
+                );
+                if ui.button("Extract to new folder").clicked() {
+                    let validation = jobs::validate_folder_name(&conflict.new_folder_name)
+                        .and_then(|()| {
+                            if jobs::destination_exists(
+                                &conflict.output.join(&conflict.new_folder_name),
+                            )? {
+                                Err(std::io::Error::other(
+                                    "That folder name is already in use. Enter a different name.",
+                                ))
+                            } else {
+                                Ok(())
+                            }
+                        });
+                    match validation {
+                        Ok(()) => choice = Some(false),
+                        Err(err) => conflict.error = err.to_string(),
+                    }
+                }
+                ui.separator();
+                ui.label("Overwrite replaces all files in the previous extraction folder.");
+                if ui
+                    .add_enabled(
+                        can_overwrite,
+                        egui::Button::new("Overwrite previous extraction"),
+                    )
+                    .clicked()
+                {
+                    choice = Some(true);
+                }
+                if !can_overwrite {
+                    ui.small(
+                        "Only a regular directory can be overwritten. Choose a new folder name.",
+                    );
+                }
+                if !conflict.error.is_empty() {
+                    ui.label(
+                        RichText::new(&conflict.error).color(Color32::from_rgb(255, 185, 185)),
+                    );
+                }
+                if ui.button("Cancel").clicked() {
+                    cancel_prompt = true;
+                }
+            });
+        if let Some(overwrite) = choice {
+            let folder_name = if overwrite {
+                conflict.existing_folder_name
+            } else {
+                conflict.new_folder_name
+            };
+            self.launch(
+                conflict.input,
+                conflict.output,
+                Destination {
+                    folder_name,
+                    overwrite,
+                },
+            );
+        } else if open && !cancel_prompt {
+            self.conflict = Some(conflict);
+        } else {
+            self.status = "Extraction cancelled before starting.".into();
         }
     }
 
@@ -412,7 +555,7 @@ impl ExtractorApp {
                 RichText::new("Leave this off to choose a destination for each extraction.")
                     .color(MUTED),
             );
-            ui.small("Each bundle is saved in its own folder. Existing extractions are kept.");
+            ui.small("Each bundle gets its own folder. Existing folders prompt for a new name or overwrite.");
             ui.add_space(14.0);
             if action(ui, "Save settings", [170.0, 38.0]).clicked() {
                 match self.draft.save() {
@@ -471,14 +614,17 @@ impl eframe::App for ExtractorApp {
                     .inner_margin(egui::Margin::symmetric(28.0, 14.0)),
             )
             .show(ctx, |ui| {
-                self.header(ui);
-                match self.page {
-                    Page::Home => self.home(ui),
-                    Page::Console => self.console(ui),
-                    Page::Settings => self.settings_page(ui),
-                    Page::About => self.about(ui),
-                }
+                ui.add_enabled_ui(self.conflict.is_none(), |ui| {
+                    self.header(ui);
+                    match self.page {
+                        Page::Home => self.home(ui),
+                        Page::Console => self.console(ui),
+                        Page::Settings => self.settings_page(ui),
+                        Page::About => self.about(ui),
+                    }
+                });
             });
+        self.conflict_prompt(ctx);
     }
 }
 

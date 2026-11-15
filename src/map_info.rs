@@ -8,6 +8,8 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
+pub const AUDIO_DATA_FILENAME: &str = "AudioData.dat";
+
 pub struct ExtractedAsset {
     pub filename: String,
     pub original_filename: String,
@@ -18,6 +20,7 @@ pub struct ExtractedAsset {
 pub struct GeneratedInfo {
     pub bytes: Vec<u8>,
     pub warnings: Vec<String>,
+    pub audio_data_source: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -549,6 +552,9 @@ pub fn generate(
     if difficulties.is_empty() {
         warnings.push("Info.dat: no identifiable difficulty beatmaps were exported.".into());
     }
+    // The official editor copies only AudioData.dat into its working directory,
+    // even if Info.dat references a differently named audio timing file.
+    let audio_data_source = (!audio_data_filename.is_empty()).then_some(audio_data_filename);
     let info = Info {
         version: "4.0.1",
         song: Song {
@@ -567,7 +573,11 @@ pub fn generate(
         audio: Audio {
             song_filename: song_filename.clone(),
             song_duration: duration,
-            audio_data_filename,
+            audio_data_filename: if audio_data_source.is_some() {
+                AUDIO_DATA_FILENAME.into()
+            } else {
+                String::new()
+            },
             bpm,
             lufs: find_number(&["/audio/lufs", "lufs"])
                 .or(lufs)
@@ -602,5 +612,9 @@ pub fn generate(
     let mut serializer = serde_json::Serializer::with_formatter(&mut bytes, formatter);
     info.serialize(&mut serializer).map_err(io::Error::other)?;
     bytes.push(b'\n');
-    Ok(GeneratedInfo { bytes, warnings })
+    Ok(GeneratedInfo {
+        bytes,
+        warnings,
+        audio_data_source,
+    })
 }
