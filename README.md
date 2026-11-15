@@ -1,12 +1,12 @@
 # Asset Extractor
 
-A Rust desktop app for extracting Unity bundles on Linux and Windows, with automatic Beat Saber map metadata generation. No Python or AssetStudio is required.
+A Rust desktop app for extracting Unity bundles on Linux and Windows, with automatic Beat Saber map metadata generation.
 
 ## Get started
 
 Download the appropriate AppImage or Windows executable from [GitHub Releases](https://github.com/TheDoctorTTV/Beat-Saber-Mapping-Extractor/releases).
 
-- **Linux:** make the AppImage executable and open it. Integrate it with Gear Lever for a menu shortcut and updates. X11 and Wayland are supported.
+- **Linux:** make the AppImage executable and open it. Integrate it with Gear Lever for a menu shortcut.
 - **Windows:** open the `.exe`. Builds are unsigned.
 
 In **Home**, select a bundle, choose **Extract**, and select an output destination. Extensionless bundles are supported. Each extraction creates its own folder; existing folders prompt you to choose a new name, overwrite, or cancel. Overwrite replaces the entire previous folder.
