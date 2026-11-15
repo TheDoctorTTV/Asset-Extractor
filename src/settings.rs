@@ -17,7 +17,7 @@ pub struct Settings {
 }
 
 pub fn config_dir() -> io::Result<PathBuf> {
-    ProjectDirs::from("", "TheDoctorTTV", "BeatSaberMappingExtractor")
+    ProjectDirs::from("", "TheDoctorTTV", "AssetExtractor")
         .map(|dirs| dirs.config_dir().to_owned())
         .ok_or_else(|| {
             io::Error::new(

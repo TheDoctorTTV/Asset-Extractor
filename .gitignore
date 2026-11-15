@@ -1,6 +1,7 @@
 # Rust build artifacts and packaged binaries
 /target/
 /dist/
+/*.AppImage.zsync
 
 # Legacy Python environments
 .venv/

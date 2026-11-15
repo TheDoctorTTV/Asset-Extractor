@@ -46,7 +46,7 @@ Schema references: [Info format](https://bsmg.wiki/mapping/map-format/info.html)
 
 ## Settings and updates
 
-Themes apply and save immediately. Default output-folder changes require **Save settings**. Settings use the current user’s configuration directory through `directories::ProjectDirs`, with organization `TheDoctorTTV` and application `BeatSaberMappingExtractor`.
+Themes apply and save immediately. Default output-folder changes require **Save settings**. Settings use the current user’s configuration directory through `directories::ProjectDirs`, with organization `TheDoctorTTV` and application `AssetExtractor`.
 
 About offers release and pre-release channels, manual checks, and checks at startup or hourly, daily, every 48 hours, or weekly while the app remains open. A red About badge indicates a newer compatible release. Installing, reinstalling, or downgrading requires an explicit action and is disabled during extraction.
 
@@ -56,7 +56,7 @@ Replacement requires a writable executable directory. Settings and extracted fil
 
 ### AppImages and Gear Lever
 
-The executable updater cannot replace the outer AppImage. Use Gear Lever or download a replacement AppImage. At startup, the app checks native and Flatpak Gear Lever configuration for the running AppImage’s registered path. A match hides updater controls and badges and disables built-in checks. Restart after changing registration.
+The built-in updater downloads the `.AppImage` and verifies its size, SHA-256, architecture, and AppImage header. It prepares a replacement beside the outer `APPIMAGE` file, atomically replaces it, and restarts that file. The AppImage’s directory must be writable. Gear Lever or manual replacement are also supported. At startup, the app checks native and Flatpak Gear Lever configuration for the running AppImage’s registered path. A match hides updater controls and badges and disables built-in checks. Restart after changing registration.
 
 AppImages embed an architecture-specific `gh-releases-zsync` source for the latest stable release. This source does not select pre-releases.
 
@@ -111,6 +111,8 @@ The script finds Debian’s versioned LLVM directory automatically when `clang-c
 
 To run both builds inside an existing Distrobox, enter it, change to the repository, and run `./build_all.sh`. Install prerequisites inside that box. The combined script builds Linux first, then Windows, stopping on failure.
 
+On Linux, startup registers the embedded icon and an identity desktop entry matching `io.github.TheDoctorTTV.AssetExtractor` under the user’s data directory. The identity entry references the installed PNG by absolute path and refreshes desktop/icon caches when changed. It is hidden from application menus so Gear Lever can supply its own launcher without duplication.
+
 ## Troubleshooting
 
 - **AppImage cannot mount:** run it with `--appimage-extract-and-run` if FUSE is unavailable.
@@ -123,11 +125,11 @@ To run both builds inside an existing Distrobox, enter it, change to the reposit
 All outputs stay in `dist/linux` or `dist/windows`. Upload these generated files together, retaining their names:
 
 ```text
-beat-saber-mapping-extractor-v<version>-linux-<arch>.AppImage
-beat-saber-mapping-extractor-v<version>-linux-<arch>.AppImage.zsync
-beat-saber-mapping-extractor-v<version>-linux-<arch>.AppImage.sha256
-beat-saber-mapping-extractor-v<version>-windows-<arch>.exe
-beat-saber-mapping-extractor-v<version>-windows-<arch>.exe.sha256
+asset-extractor-v<version>-linux-<arch>.AppImage
+asset-extractor-v<version>-linux-<arch>.AppImage.zsync
+asset-extractor-v<version>-linux-<arch>.AppImage.sha256
+asset-extractor-v<version>-windows-<arch>.exe
+asset-extractor-v<version>-windows-<arch>.exe.sha256
 ```
 
 Tags must match the Cargo package version, optionally prefixed with `v`. For pre-releases, use a version such as `1.1.0-rc.1` and mark the release accordingly. AppImage updates remain on the latest stable channel. Build scripts do not create or publish releases.

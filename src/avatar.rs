@@ -26,7 +26,7 @@ pub fn fetch() -> Result<Vec<u8>, String> {
     let response = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(15))
         .user_agent(concat!(
-            "BeatSaberMappingExtractor/",
+            "AssetExtractor/",
             env!("CARGO_PKG_VERSION")
         ))
         .build()

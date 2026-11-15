@@ -3,8 +3,8 @@ set -euo pipefail
 
 # Run this copy from dist/linux so the launcher targets that exact distribution.
 package_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-app_id=io.github.TheDoctorTTV.BeatSaberMappingExtractor
-binary_path="$package_dir/beat-saber-mapping-extractor"
+app_id=io.github.TheDoctorTTV.AssetExtractor
+binary_path="$package_dir/asset-extractor"
 icon_path="$package_dir/$app_id.png"
 if [[ ! -x "$binary_path" || ! -f "$icon_path" ]]; then
     echo "Run install_desktop.sh from a complete dist/linux package after building." >&2
@@ -43,14 +43,14 @@ trap 'rm -f -- "$desktop_temp"' EXIT
 cat > "$desktop_temp" <<EOF
 [Desktop Entry]
 Type=Application
-Name=Beat Saber Mapping Extractor
+Name=Asset Extractor
 Comment=Extract Beat Saber bundle assets and map data
 Exec=$desktop_exec_value
 Icon=$app_id
 Terminal=false
 Categories=Utility;
 StartupNotify=true
-StartupWMClass=beat-saber-mapping-extractor
+StartupWMClass=$app_id
 EOF
 chmod 644 -- "$desktop_temp"
 mv -f -- "$desktop_temp" "$applications_dir/$app_id.desktop"
