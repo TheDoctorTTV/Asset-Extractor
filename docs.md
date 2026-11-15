@@ -46,7 +46,7 @@ Schema references: [Info format](https://bsmg.wiki/mapping/map-format/info.html)
 
 ## Settings and updates
 
-Themes apply and save immediately. Default output-folder changes require **Save settings**. Settings use the current user’s configuration directory through `directories::ProjectDirs`, with organization `TheDoctorTTV` and application `BeatSaberMappingExtractor`.
+Themes apply and save immediately. Default output-folder changes require **Save settings**. Settings use the current user’s configuration directory through `directories::ProjectDirs`, with organization `TheDoctorTTV` and application `AssetExtractor`.
 
 About offers release and pre-release channels, manual checks, and checks at startup or hourly, daily, every 48 hours, or weekly while the app remains open. A red About badge indicates a newer compatible release. Installing, reinstalling, or downgrading requires an explicit action and is disabled during extraction.
 
@@ -123,11 +123,11 @@ To run both builds inside an existing Distrobox, enter it, change to the reposit
 All outputs stay in `dist/linux` or `dist/windows`. Upload these generated files together, retaining their names:
 
 ```text
-beat-saber-mapping-extractor-v<version>-linux-<arch>.AppImage
-beat-saber-mapping-extractor-v<version>-linux-<arch>.AppImage.zsync
-beat-saber-mapping-extractor-v<version>-linux-<arch>.AppImage.sha256
-beat-saber-mapping-extractor-v<version>-windows-<arch>.exe
-beat-saber-mapping-extractor-v<version>-windows-<arch>.exe.sha256
+asset-extractor-v<version>-linux-<arch>.AppImage
+asset-extractor-v<version>-linux-<arch>.AppImage.zsync
+asset-extractor-v<version>-linux-<arch>.AppImage.sha256
+asset-extractor-v<version>-windows-<arch>.exe
+asset-extractor-v<version>-windows-<arch>.exe.sha256
 ```
 
 Tags must match the Cargo package version, optionally prefixed with `v`. For pre-releases, use a version such as `1.1.0-rc.1` and mark the release accordingly. AppImage updates remain on the latest stable channel. Build scripts do not create or publish releases.

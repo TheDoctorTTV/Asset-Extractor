@@ -27,15 +27,15 @@ try {
         default { $null }
     }
     if ($releaseArch) {
-        $releaseName = "beat-saber-mapping-extractor-v$buildVersion-windows-$releaseArch.exe"
+        $releaseName = "asset-extractor-v$buildVersion-windows-$releaseArch.exe"
         $releaseFile = Join-Path $destination $releaseName
         Copy-Item -LiteralPath "target/$buildTarget/release/$buildBinary.exe" -Destination $releaseFile -Force
-        $legacyFile = Join-Path $destination 'beat-saber-mapping-extractor.exe'
+        $legacyFile = Join-Path $destination 'asset-extractor.exe'
         if (Test-Path -LiteralPath $legacyFile) { Remove-Item -LiteralPath $legacyFile -Force }
         $checksum = (Get-FileHash -LiteralPath $releaseFile -Algorithm SHA256).Hash.ToLowerInvariant()
         [IO.File]::WriteAllText("$releaseFile.sha256", "$checksum  $releaseName`n", [Text.Encoding]::ASCII)
     } else {
-        $releaseFile = Join-Path $destination 'beat-saber-mapping-extractor.exe'
+        $releaseFile = Join-Path $destination 'asset-extractor.exe'
         Copy-Item -LiteralPath "target/$buildTarget/release/$buildBinary.exe" -Destination $releaseFile -Force
     }
 }

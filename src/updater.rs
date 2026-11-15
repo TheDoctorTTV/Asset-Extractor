@@ -15,7 +15,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const REPO: &str = "TheDoctorTTV/Beat-Saber-Mapping-Extractor";
+const REPO: &str = "TheDoctorTTV/Asset-Extractor";
 const MAX_DOWNLOAD: u64 = 256 * 1024 * 1024;
 
 #[derive(Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
@@ -492,7 +492,7 @@ fn platform_name() -> Option<String> {
 }
 fn asset_name(version: &Version) -> Option<String> {
     Some(format!(
-        "beat-saber-mapping-extractor-v{version}-{}{}",
+        "asset-extractor-v{version}-{}{}",
         platform_name()?,
         if cfg!(windows) { ".exe" } else { "" }
     ))
@@ -503,7 +503,7 @@ fn client(timeout: Duration) -> Result<reqwest::blocking::Client, reqwest::Error
         .connect_timeout(Duration::from_secs(10))
         .timeout(timeout)
         .user_agent(concat!(
-            "BeatSaberMappingExtractor/",
+            "AssetExtractor/",
             env!("CARGO_PKG_VERSION")
         ))
         .build()

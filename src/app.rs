@@ -661,9 +661,9 @@ impl ExtractorApp {
                         ui.label("Created by");
                         ui.hyperlink_to(
                             RichText::new("TheDoctorTTV").strong(),
-                            "https://github.com/TheDoctorTTV/Beat-Saber-Mapping-Extractor",
+                            "https://github.com/TheDoctorTTV/Asset-Extractor",
                         )
-                        .on_hover_text("Beat-Saber-Mapping-Extractor");
+                        .on_hover_text("Asset-Extractor");
                     });
                 });
                 if !self.updater.enabled() {

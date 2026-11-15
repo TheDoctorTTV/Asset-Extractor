@@ -70,10 +70,10 @@ fi
 # cargo-xwin supplies the Microsoft SDK and CRT for the Windows MSVC target.
 cargo xwin build --release --bin "$build_binary" --target "$build_target" --target-dir "$PWD/target"
 mkdir -p dist/windows
-release_name="beat-saber-mapping-extractor-v${build_version}-windows-${release_arch}.exe"
+release_name="asset-extractor-v${build_version}-windows-${release_arch}.exe"
 install -m 755 "target/$build_target/release/$build_binary.exe" "dist/windows/$release_name"
 # Remove the redundant filename left by earlier versions of this script.
-rm -f -- dist/windows/beat-saber-mapping-extractor.exe
+rm -f -- dist/windows/asset-extractor.exe
 cp README.md docs.md dist/windows/
 (cd dist/windows && sha256sum "$release_name" > "$release_name.sha256")
 echo

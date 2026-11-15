@@ -4,7 +4,7 @@ A Rust desktop app for extracting Unity bundles on Linux and Windows, with autom
 
 ## Get started
 
-Download the appropriate AppImage or Windows executable from [GitHub Releases](https://github.com/TheDoctorTTV/Beat-Saber-Mapping-Extractor/releases).
+Download the appropriate AppImage or Windows executable from [GitHub Releases](https://github.com/TheDoctorTTV/Asset-Extractor/releases).
 
 - **Linux:** make the AppImage executable and open it. Integrate it with Gear Lever for a menu shortcut.
 - **Windows:** open the `.exe`. Builds are unsigned.
@@ -32,7 +32,7 @@ Windows cross-builds default to x86_64. Pass `aarch64` to `build_windows.sh` or 
 
 Linux outputs an AppImage, `.zsync`, and `.sha256`; Windows outputs one versioned `.exe` and its `.sha256` for supported release targets. Build scripts prepare files without publishing releases or running tests.
 
-The Cargo package is `asset-extractor`; release filenames retain the `beat-saber-mapping-extractor` prefix for updater compatibility.
+The Cargo package and release filenames use `asset-extractor`.
 
 ## Documentation
 

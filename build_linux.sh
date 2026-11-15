@@ -43,16 +43,16 @@ mkdir -p dist/linux
 # The executable remains an intermediate Cargo artifact, never a distribution asset.
 build_executable="$PWD/target/$build_target/release/$build_binary"
 # Start with a fresh AppDir so removed libraries cannot leak into later builds.
-app_id=io.github.TheDoctorTTV.BeatSaberMappingExtractor
-release_name="beat-saber-mapping-extractor-v${build_version}-linux-${release_arch}"
+app_id=io.github.TheDoctorTTV.AssetExtractor
+release_name="asset-extractor-v${build_version}-linux-${release_arch}"
 appimage_path="$PWD/dist/linux/$release_name.AppImage"
 icon_path="$PWD/assets/$app_id.png"
 app_dir="$(mktemp -d "$PWD/dist/linux/.AppDir.XXXXXX")"
 trap 'rm -rf -- "$app_dir"' EXIT
 # mktemp creates private directories; the AppImage root must be readable by everyone.
 chmod 755 -- "$app_dir"
-mkdir -p -- "$app_dir/usr/share/applications" "$app_dir/usr/share/doc/beat-saber-mapping-extractor"
-cp README.md docs.md "$app_dir/usr/share/doc/beat-saber-mapping-extractor/"
+mkdir -p -- "$app_dir/usr/share/applications" "$app_dir/usr/share/doc/asset-extractor"
+cp README.md docs.md "$app_dir/usr/share/doc/asset-extractor/"
 cat > "$app_dir/usr/share/applications/$app_id.desktop" <<EOF
 [Desktop Entry]
 Type=Application
@@ -63,7 +63,7 @@ Icon=$app_id
 Terminal=false
 Categories=Utility;
 StartupNotify=true
-StartupWMClass=beat-saber-mapping-extractor
+StartupWMClass=asset-extractor
 EOF
 # Extract the packaging tools when running them, avoiding a build-time FUSE requirement.
 # linuxdeploy bundles eligible shared libraries and supplies the AppRun launcher.
@@ -72,7 +72,7 @@ EOF
 cd -- "$(dirname -- "$appimage_path")"
 ARCH="$release_arch" APPIMAGE_EXTRACT_AND_RUN=1 \
     LDAI_OUTPUT="$appimage_path" LINUXDEPLOY_OUTPUT_VERSION="$build_version" \
-    LDAI_UPDATE_INFORMATION="gh-releases-zsync|TheDoctorTTV|Beat-Saber-Mapping-Extractor|latest|beat-saber-mapping-extractor-v*-linux-${release_arch}.AppImage.zsync" \
+    LDAI_UPDATE_INFORMATION="gh-releases-zsync|TheDoctorTTV|Asset-Extractor|latest|asset-extractor-v*-linux-${release_arch}.AppImage.zsync" \
     "$linuxdeploy" --appdir "$app_dir" \
         --executable "$build_executable" \
         --desktop-file "$app_dir/usr/share/applications/$app_id.desktop" \
