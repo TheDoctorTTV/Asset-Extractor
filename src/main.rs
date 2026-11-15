@@ -29,7 +29,7 @@ fn main() -> eframe::Result<()> {
         });
     }
     eframe::run_native(
-        "Beat Saber Mapping Extractor",
+        "Asset Extractor",
         eframe::NativeOptions {
             viewport,
             ..Default::default()

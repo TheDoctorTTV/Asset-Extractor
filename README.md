@@ -41,7 +41,7 @@ Default limits include 512 MiB per prepared file and 16 GiB total prepared outpu
 
 ## App updates
 
-The **About** tab follows Stream247’s app-update workflow:
+When the running AppImage is registered in Gear Lever, the app hides the built-in updater and update badge and skips its update checks. Detection reads the matching AppImage path from native or Flatpak Gear Lever configuration at startup; restart the app after changing its registration. Gear Lever uses the embedded GitHub update source. Other installations retain the **About** tab’s app-update workflow:
 
 - Check GitHub Releases at startup, with further checks every hour by default. Choose **Startup only**, hourly, daily, every 48 hours, or weekly. The timer runs while the app is open.
 - Select **Releases** or **Pre-releases**. Each channel lists its own published releases, newest semantic version first. Drafts, invalid version tags, and Python-era versions below 1.0.0 are excluded.
@@ -55,20 +55,21 @@ Installation replaces the executable at its current location using `self-replace
 
 ### Publishing compatible releases
 
-Build each platform using its build script. In addition to the regular `dist/linux` or `dist/windows` output, supported host builds produce a versioned executable and a `.sha256` file under `dist/releases`, for example:
+Build each platform using its build script. Linux produces only an AppImage distribution with update files; Windows produces an executable with its checksum. All outputs stay in their platform folder: `dist/linux` or `dist/windows`. Upload the versioned release assets and their sidecars from those folders, for example:
 
 ```text
-beat-saber-mapping-extractor-v1.0.0-linux-x86_64
-beat-saber-mapping-extractor-v1.0.0-linux-x86_64.sha256
+beat-saber-mapping-extractor-v1.0.0-linux-x86_64.AppImage
+beat-saber-mapping-extractor-v1.0.0-linux-x86_64.AppImage.sha256
+beat-saber-mapping-extractor-v1.0.0-linux-x86_64.AppImage.zsync
 beat-saber-mapping-extractor-v1.0.0-windows-x86_64.exe
 beat-saber-mapping-extractor-v1.0.0-windows-x86_64.exe.sha256
 ```
 
-Upload both files from each platform to the same GitHub release. The tag must match the `Cargo.toml` package version, optionally prefixed with `v`. For a pre-release, use a version such as `1.1.0-rc.1` and mark the GitHub release as a pre-release. Keep asset names unchanged. Archives and older generic binary names are not installed by this updater. Build scripts only prepare files; they do not create or publish releases.
+Upload all generated release files from each platform to the same GitHub release. The tag must match the `Cargo.toml` package version, optionally prefixed with `v`. For a pre-release, use a version such as `1.1.0-rc.1` and mark the GitHub release as a pre-release. Keep asset names unchanged. Archives and older generic binary names are not installed by this updater. Build scripts only prepare files; they do not create or publish releases.
 
 ## Build on Linux
 
-Install current stable [Rust and Cargo](https://rustup.rs/), a C/C++ toolchain, and pkg-config. For example:
+Install current stable [Rust and Cargo](https://rustup.rs/), a C/C++ toolchain, pkg-config, and curl. The script downloads and caches the official linuxdeploy AppImage under `target/appimage-tools` on its first run; internet access is required for that download. For example:
 
 ```bash
 # Debian / Ubuntu
@@ -87,15 +88,13 @@ Run from any working directory:
 bash /path/to/Beat-Saber-Mapping-Extractor/build_linux.sh
 ```
 
-Output: `dist/linux/beat-saber-mapping-extractor`. Launch it in a graphical desktop session. Both X11 and Wayland are enabled. Native file dialogs use `xdg-desktop-portal` with a desktop backend such as KDE or GTK; install these if your desktop does not already supply them. The binary uses system graphics/display libraries and is not an AppImage or a fully static build.
+Output: `dist/linux/beat-saber-mapping-extractor-v<version>-linux-<arch>.AppImage` alongside its `.AppImage.zsync` update file and `.AppImage.sha256` checksum in `dist/linux`. The AppImage embeds an architecture-specific `gh-releases-zsync` source targeting this repository’s latest stable GitHub release. Upload the `.AppImage`, `.AppImage.zsync`, and `.AppImage.sha256` files together; keep their generated names. Gear Lever can discover the embedded source automatically after integration. Pre-releases are not selected by this AppImage update source. AppImage packaging supports x86_64 and aarch64 GNU Linux hosts. The script uses [linuxdeploy](https://github.com/linuxdeploy/linuxdeploy) to bundle shared libraries and the app icon. Packaging tools run without requiring FUSE. Launch the AppImage in a graphical desktop session; if FUSE is unavailable, run it with `--appimage-extract-and-run`. Both X11 and Wayland are enabled. Native file dialogs use `xdg-desktop-portal` with a desktop backend such as KDE or GTK; install these if your desktop does not already supply them. AppImages still depend on compatible host glibc and graphics drivers; build on the oldest Linux distribution you intend to support.
+
+Build scripts read the package name from `Cargo.toml` and explicitly build that binary (`asset-extractor` currently). Release filenames retain the `beat-saber-mapping-extractor` prefix for updater compatibility. The executable compiled by Cargo stays under `target` as an intermediate packaging artifact. No loose Linux executable, native updater release asset, or desktop installer is distributed. Use Gear Lever or download a new AppImage to update the Linux distribution; the built-in executable updater cannot replace an AppImage.
 
 ### Linux icon and launcher
 
-The Linux build also registers a launcher and the app icon for your current user under `${XDG_DATA_HOME:-$HOME/.local/share}/applications` and `icons/hicolor`. Run the build as your normal user. The desktop entry matches the window’s Wayland application ID; X11 also retains the embedded window icon. The application menu entry is **Beat Saber Mapping Extractor**.
-
-The launcher points at the executable in `dist/linux`. After rebuilding, close and reopen the app to pick up the new application ID and icon. If you previously pinned the generic icon, unpin it and pin the new launcher. If you move or distribute the `dist/linux` folder, run its `install_desktop.sh` to register the new location for that user. Keep the PNG and installer beside the executable.
-
-For packaging or CI without desktop registration, use `INSTALL_DESKTOP_ENTRY=0 ./build_linux.sh`. Linux executable files do not carry a file-manager icon in the same way Windows executables do; use the installed desktop launcher for that icon. See the [desktop entry icon specification](https://specifications.freedesktop.org/desktop-entry/latest/recognized-keys.html).
+The AppImage includes its icon and desktop entry. Integrate it using Gear Lever to register the application menu launcher and manage updates. The build script does not register a launcher pointing at a loose executable.
 
 ## Build on Windows
 
@@ -107,11 +106,38 @@ Double-click `build_windows.bat`, or run:
 .\build_windows.ps1
 ```
 
-If PowerShell's script execution policy blocks that command, run `build_windows.bat`, which applies a process-local policy override.
+If PowerShell's script execution policy blocks that command, run `build_windows.bat`, which applies a process-local policy override. Both Windows build paths end with a result summary listing the output folder, executable, README, and checksum for supported release targets. The batch launcher pauses so the results remain visible after a double-click (set `CI` to skip the pause); it preserves the build's exit code.
 
-Output: `dist/windows/beat-saber-mapping-extractor.exe`. The existing icon is embedded for the application window. The app has no console window on Windows. Binaries are unsigned.
+Output: one versioned `dist/windows/beat-saber-mapping-extractor-v<version>-windows-<arch>.exe` and its `.sha256` checksum for supported release targets. Other Windows targets produce one unversioned `.exe`. The existing icon is embedded for the application window. The app has no console window on Windows. Binaries are unsigned.
 
-Each script builds a release binary for the machine running it and copies the executable and README into `dist`. Linux also includes the icon and desktop registration script described above. Build Linux on Linux and Windows on Windows; these scripts do not configure cross-compilation. They do not run tests or install system dependencies. Cargo downloads dependencies as needed and updates `Cargo.lock` when dependencies change. Keep that lockfile in version control. Use current stable Rust; the extraction backend requires Rust 1.88 or newer and some dependencies may require a newer compiler.
+### Build Windows binaries on Linux
+
+Install stable Rust through rustup and [cargo-xwin](https://github.com/rust-cross/cargo-xwin), plus Clang/LLVM and LLD. On CachyOS/Arch:
+
+```bash
+sudo pacman -S --needed clang llvm lld
+cargo install --locked cargo-xwin
+rustup target add x86_64-pc-windows-msvc
+./build_windows.sh
+```
+
+On Debian/Ubuntu, install the system tools with `sudo apt install build-essential clang llvm lld`. The script automatically adds a suitable `/usr/lib/llvm-*/bin` directory to its own PATH when Debian’s unversioned `clang-cl` is absent from PATH.
+
+The script defaults to x86_64 Windows MSVC. For ARM64 Windows, install `aarch64-pc-windows-msvc` through rustup and run `./build_windows.sh aarch64`. It checks prerequisites before compiling. The first build downloads and caches the Microsoft SDK and CRT through cargo-xwin, whose use entails accepting the Microsoft license described in its documentation. Wine is not needed to compile; running the result requires Windows or a compatible runtime.
+
+Outputs match the native Windows script: one versioned `.exe`, its `.sha256` checksum, and README all go into `dist/windows`. No `dist/releases` folder is created. The script ends with the target, output folder, executable, checksum file, SHA-256 value, and README paths.
+
+The native build scripts build for the machine running them; `build_windows.sh` cross-compiles Windows MSVC binaries from Linux. Linux packages the compiled executable, README, icon, and desktop entry inside the AppImage; Windows copies its executable and README into `dist/windows`. Use `build_linux.sh` for Linux AppImages, `build_windows.sh` for Windows binaries from Linux, or the PowerShell/batch scripts for Windows binaries from Windows. They do not run tests or install system dependencies. Cargo downloads dependencies as needed and updates `Cargo.lock` when dependencies change. Keep that lockfile in version control. Use current stable Rust; the extraction backend requires Rust 1.88 or newer and some dependencies may require a newer compiler.
+
+## Build both platforms from Linux
+
+With the Linux and Windows cross-build prerequisites installed, run this on Linux or inside your Debian Distrobox:
+
+```bash
+./build_all.sh
+```
+
+It runs `build_linux.sh` followed by `build_windows.sh`, stops on failure, and ends with the result folders: `dist/linux` and `dist/windows`. Windows defaults to x86_64; use `./build_all.sh aarch64` for ARM64 Windows. Linux still builds for the current Rust host target.
 
 ## Source layout
 
@@ -123,6 +149,8 @@ Each script builds a release binary for the machine running it and copies the ex
 - `src/updater.rs`: release discovery, scheduled checks, verified downloads, and executable installation.
 - `src/avatar.rs`: GitHub avatar fetching and in-memory image decoding.
 - `build_linux.sh`, `build_windows.ps1`, `build_windows.bat`: native release builds.
+- `build_windows.sh`: Windows MSVC release builds from Linux using cargo-xwin.
+- `build_all.sh`: Linux AppImage and Windows cross-builds in sequence.
 
 ## Credits
 

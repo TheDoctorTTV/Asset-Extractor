@@ -95,7 +95,64 @@ enum Event {
     Failed(String),
 }
 
+// Gear Lever records installed AppImages in gearlever.conf. Our AppImages embed
+// gh-releases-zsync metadata, which Gear Lever uses even without a saved manager.
+// Match the full running AppImage path, rather than a folder or the presence of
+// Gear Lever itself, so unrelated installations retain their built-in updater.
+#[cfg(target_os = "linux")]
+fn gear_lever_manages_updates() -> bool {
+    let Some(appimage) = std::env::var_os("APPIMAGE")
+        .filter(|path| !path.is_empty())
+        .and_then(|path| std::fs::canonicalize(path).ok())
+    else {
+        return false;
+    };
+    let Some(dirs) = directories::BaseDirs::new() else {
+        return false;
+    };
+    let configs = [
+        dirs.config_dir().join("gearlever.conf"),
+        dirs.home_dir()
+            .join(".var/app/it.mijorus.gearlever/config/gearlever.conf"),
+    ];
+    configs.iter().any(|config| {
+        let Ok(contents) = std::fs::read_to_string(config) else {
+            return false;
+        };
+        let mut app_section = false;
+        for line in contents.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
+                continue;
+            }
+            if let Some(section) = line.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
+                app_section = section.strip_prefix("app.").is_some_and(|hash| {
+                    hash.len() == 32 && hash.bytes().all(|byte| byte.is_ascii_hexdigit())
+                });
+                continue;
+            }
+            if app_section {
+                if let Some((key, value)) = line.split_once('=') {
+                    if key.trim().eq_ignore_ascii_case("file_path")
+                        && std::fs::canonicalize(value.trim())
+                            .is_ok_and(|path| path == appimage)
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    })
+}
+
+#[cfg(not(target_os = "linux"))]
+fn gear_lever_manages_updates() -> bool {
+    false
+}
+
 pub struct Updater {
+    enabled: bool,
     pub channel: Channel,
     pub interval: CheckInterval,
     releases: Vec<Release>,
@@ -114,6 +171,7 @@ pub struct Updater {
 impl Updater {
     pub fn new(channel: Channel, interval: CheckInterval) -> Self {
         Self {
+            enabled: !gear_lever_manages_updates(),
             channel,
             interval,
             releases: Vec::new(),
@@ -129,14 +187,20 @@ impl Updater {
             cancel: Arc::new(AtomicBool::new(false)),
         }
     }
+    pub fn enabled(&self) -> bool {
+        self.enabled
+    }
     pub fn update_available(&self) -> bool {
+        if !self.enabled {
+            return false;
+        }
         self.releases
             .iter()
             .find(|r| r.binary.is_some())
             .is_some_and(|release| release.version > current_version())
     }
     pub fn check(&mut self) {
-        if self.receiver.is_some() || self.installed {
+        if !self.enabled || self.receiver.is_some() || self.installed {
             return;
         }
         let (tx, rx) = mpsc::channel();
@@ -159,6 +223,9 @@ impl Updater {
         self.next_check = Instant::now() + Duration::from_secs(self.interval.seconds());
     }
     pub fn tick(&mut self, ctx: &egui::Context) -> Option<PathBuf> {
+        if !self.enabled {
+            return None;
+        }
         for _ in 0..100 {
             let event = match &self.receiver {
                 Some(rx) => rx.try_recv(),
@@ -234,7 +301,7 @@ impl Updater {
         None
     }
     fn install(&mut self) {
-        if self.receiver.is_some() || self.installed {
+        if !self.enabled || self.receiver.is_some() || self.installed {
             return;
         }
         let Some(release) = self.releases.get(self.selected) else {
@@ -271,6 +338,9 @@ impl Updater {
     }
     // Returns true when the user changes persisted preferences.
     pub fn show(&mut self, ui: &mut egui::Ui, extraction_busy: bool) -> bool {
+        if !self.enabled {
+            return false;
+        }
         let old_channel = self.channel;
         let old_interval = self.interval;
         let busy = self.receiver.is_some() || self.installed;

@@ -666,6 +666,9 @@ impl ExtractorApp {
                         .on_hover_text("Beat-Saber-Mapping-Extractor");
                     });
                 });
+                if !self.updater.enabled() {
+                    return;
+                }
                 ui.add_space(26.0);
                 ui.separator();
                 ui.add_space(16.0);
