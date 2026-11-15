@@ -271,39 +271,103 @@ impl Updater {
     }
     // Returns true when the user changes persisted preferences.
     pub fn show(&mut self, ui: &mut egui::Ui, extraction_busy: bool) -> bool {
-        ui.heading("App Updates");
-        ui.label(format!("Installed version: {}", env!("CARGO_PKG_VERSION")));
-        ui.label(&self.status);
-        if self.receiver.is_some() || self.progress > 0.0 {
-            ui.add(egui::ProgressBar::new(self.progress).animate(self.receiver.is_some()));
-        }
         let old_channel = self.channel;
         let old_interval = self.interval;
         let busy = self.receiver.is_some() || self.installed;
+        let installable = self
+            .releases
+            .get(self.selected)
+            .is_some_and(|r| r.binary.is_some());
+        let install_label = match self
+            .releases
+            .get(self.selected)
+            .map(|r| r.version.cmp(&current_version()))
+        {
+            Some(std::cmp::Ordering::Less) => "Downgrade",
+            Some(std::cmp::Ordering::Equal) => "Reinstall",
+            _ => "Install",
+        };
+        let mut check_clicked = false;
+        let mut install_clicked = false;
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("App Updates").size(16.0));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                install_clicked = ui
+                    .add_enabled(
+                        !busy && !extraction_busy && installable,
+                        egui::Button::new(install_label),
+                    )
+                    .on_hover_text("Install the selected version and restart the app")
+                    .clicked();
+                check_clicked = ui.add_enabled(!busy, egui::Button::new("Check")).clicked();
+            });
+        });
+        ui.add(egui::Label::new(&self.status).truncate())
+            .on_hover_text(&self.status);
+        if self.receiver.is_some() || (self.installing && self.progress > 0.0) {
+            ui.add(egui::ProgressBar::new(self.progress).animate(self.receiver.is_some()));
+        }
+        ui.add_space(8.0);
+        // Match stream247's labeled fields, wrapping whole fields on small windows.
+        let field_width = ((ui.available_width() - 24.0) / 3.0)
+            .max(180.0)
+            .min(ui.available_width());
         ui.add_enabled_ui(!busy, |ui| {
             ui.horizontal_wrapped(|ui| {
-                ui.label("Channel");
-                egui::ComboBox::from_id_salt("update-channel")
-                    .selected_text(self.channel.label())
-                    .show_ui(ui, |ui| {
-                        for channel in [Channel::Stable, Channel::Prerelease] {
-                            ui.selectable_value(&mut self.channel, channel, channel.label());
-                        }
+                ui.vertical(|ui| {
+                    ui.set_width(field_width);
+                    ui.small("Channel");
+                    egui::ComboBox::from_id_salt("update-channel")
+                        .width(field_width)
+                        .selected_text(self.channel.label())
+                        .show_ui(ui, |ui| {
+                            for channel in [Channel::Stable, Channel::Prerelease] {
+                                ui.selectable_value(&mut self.channel, channel, channel.label());
+                            }
+                        });
+                });
+                ui.vertical(|ui| {
+                    ui.set_width(field_width);
+                    ui.small("Version");
+                    ui.add_enabled_ui(old_channel == self.channel, |ui| {
+                        let selected = self
+                            .releases
+                            .get(self.selected)
+                            .map(|r| r.tag.as_str())
+                            .unwrap_or("Check to load versions");
+                        egui::ComboBox::from_id_salt("update-version")
+                            .width(field_width)
+                            .selected_text(selected)
+                            .show_ui(ui, |ui| {
+                                for (index, release) in self.releases.iter().enumerate() {
+                                    let label = if release.binary.is_some() {
+                                        release.tag.clone()
+                                    } else {
+                                        format!("{} (no compatible binary)", release.tag)
+                                    };
+                                    ui.selectable_value(&mut self.selected, index, label);
+                                }
+                            });
                     });
-                ui.label("Checks after startup");
-                egui::ComboBox::from_id_salt("update-interval")
-                    .selected_text(self.interval.label())
-                    .show_ui(ui, |ui| {
-                        for interval in [
-                            CheckInterval::StartupOnly,
-                            CheckInterval::Hourly,
-                            CheckInterval::Daily,
-                            CheckInterval::TwoDays,
-                            CheckInterval::Weekly,
-                        ] {
-                            ui.selectable_value(&mut self.interval, interval, interval.label());
-                        }
-                    });
+                });
+                ui.vertical(|ui| {
+                    ui.set_width(field_width);
+                    ui.small("Checks after startup");
+                    egui::ComboBox::from_id_salt("update-interval")
+                        .width(field_width)
+                        .selected_text(self.interval.label())
+                        .show_ui(ui, |ui| {
+                            for interval in [
+                                CheckInterval::StartupOnly,
+                                CheckInterval::Hourly,
+                                CheckInterval::Daily,
+                                CheckInterval::TwoDays,
+                                CheckInterval::Weekly,
+                            ] {
+                                ui.selectable_value(&mut self.interval, interval, interval.label());
+                            }
+                        });
+                });
             });
         });
         let channel_changed = old_channel != self.channel;
@@ -312,62 +376,19 @@ impl Updater {
             self.selected = 0;
             self.checked = false;
             self.check();
+        } else if check_clicked {
+            self.check();
+        } else if install_clicked {
+            self.install();
         }
         if old_interval != self.interval {
             self.next_check = Instant::now() + Duration::from_secs(self.interval.seconds());
         }
-        ui.horizontal_wrapped(|ui| {
-            ui.label("Version");
-            ui.add_enabled_ui(!busy && !channel_changed, |ui| {
-                let selected = self
-                    .releases
-                    .get(self.selected)
-                    .map(|r| r.tag.as_str())
-                    .unwrap_or("Check for versions");
-                egui::ComboBox::from_id_salt("update-version")
-                    .selected_text(selected)
-                    .show_ui(ui, |ui| {
-                        for (index, release) in self.releases.iter().enumerate() {
-                            let label = if release.binary.is_some() {
-                                release.tag.clone()
-                            } else {
-                                format!("{} (no compatible binary)", release.tag)
-                            };
-                            ui.selectable_value(&mut self.selected, index, label);
-                        }
-                    });
-            });
-            if ui
-                .add_enabled(!busy && !channel_changed, egui::Button::new("Check"))
-                .clicked()
-            {
-                self.check();
-            }
-            let release = self.releases.get(self.selected);
-            let installable = release.is_some_and(|r| r.binary.is_some());
-            let label = match release.map(|r| r.version.cmp(&current_version())) {
-                Some(std::cmp::Ordering::Less) => "Downgrade & restart",
-                Some(std::cmp::Ordering::Equal) => "Reinstall & restart",
-                _ => "Install & restart",
-            };
-            if ui
-                .add_enabled(
-                    !busy && !channel_changed && !extraction_busy && installable,
-                    egui::Button::new(label),
-                )
-                .clicked()
-            {
-                self.install();
-            }
-        });
         if extraction_busy {
             ui.small("Finish or cancel extraction before installing an update.");
         }
         if let Some(release) = self.releases.get(self.selected) {
             ui.hyperlink_to("Release notes", &release.url);
-        }
-        if !self.checked {
-            ui.small("Checks never install automatically.");
         }
         channel_changed || old_interval != self.interval
     }

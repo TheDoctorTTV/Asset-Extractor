@@ -623,29 +623,47 @@ impl ExtractorApp {
         if refresh_due {
             self.refresh_avatar();
         }
-        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-            ui.add_space(25.0);
-            ui.vertical_centered(|ui| {
-                ui.set_max_width(650.0);
-                if let Some(texture) = &self.avatar {
-                    ui.add(egui::Image::new(texture).fit_to_exact_size(egui::vec2(128.0, 128.0)).rounding(64.0));
-                } else {
-                    let (rect, _) = ui.allocate_exact_size(egui::vec2(128.0, 128.0), egui::Sense::hover());
-                    ui.painter().circle_filled(rect.center(), 64.0, palette.primary);
-                    ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "TD", egui::FontId::proportional(42.0), Color32::WHITE);
-                }
-                ui.add_space(10.0);
-                ui.heading(avatar::USERNAME);
-                ui.hyperlink_to("GitHub profile", avatar::PROFILE_URL);
-                ui.label(RichText::new(&self.avatar_status).color(palette.muted));
-                ui.add_space(14.0);
-                ui.label("Beat Saber Mapping Extractor");
-                ui.label("Extract bundle assets and convert compressed map data in one step.");
-                ui.hyperlink_to("Project on GitHub", "https://github.com/TheDoctorTTV/Beat-Saber-Mapping-Extractor");
-                ui.add_space(20.0);
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                ui.add_space(22.0);
+                ui.heading("About");
+                ui.add_space(16.0);
+                ui.horizontal(|ui| {
+                    if let Some(texture) = &self.avatar {
+                        ui.add(
+                            egui::Image::new(texture)
+                                .fit_to_exact_size(egui::vec2(48.0, 48.0))
+                                .rounding(24.0),
+                        );
+                    } else {
+                        let (rect, _) =
+                            ui.allocate_exact_size(egui::vec2(48.0, 48.0), egui::Sense::hover());
+                        ui.painter()
+                            .circle_filled(rect.center(), 24.0, palette.primary);
+                        ui.painter().text(
+                            rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            "TD",
+                            egui::FontId::proportional(18.0),
+                            Color32::WHITE,
+                        );
+                    }
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label("Created by");
+                        ui.hyperlink_to(
+                            RichText::new(avatar::USERNAME).strong(),
+                            avatar::PROFILE_URL,
+                        )
+                        .on_hover_text(&self.avatar_status);
+                    });
+                });
+                ui.add_space(26.0);
                 ui.separator();
-                ui.add_space(12.0);
-                let preferences_changed = self.updater.show(ui, self.receiver.is_some() || self.conflict.is_some());
+                ui.add_space(16.0);
+                let preferences_changed = self
+                    .updater
+                    .show(ui, self.receiver.is_some() || self.conflict.is_some());
                 if preferences_changed {
                     self.settings.update_channel = self.updater.channel;
                     self.settings.update_check_interval = self.updater.interval;
@@ -656,10 +674,7 @@ impl ExtractorApp {
                         self.log(self.updater.status.clone());
                     }
                 }
-                ui.add_space(20.0);
-                ui.small("Uses unity-rs-core for native Unity extraction. Educational use; respect creators’ rights.");
             });
-        });
     }
 }
 

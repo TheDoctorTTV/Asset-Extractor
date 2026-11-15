@@ -132,13 +132,13 @@ impl Theme {
         v.code_bg_color = p.surface;
         v.override_text_color = Some(Color32::WHITE);
         v.selection.bg_fill = p.primary;
-        v.selection.stroke = Stroke::new(1.0, Color32::WHITE);
+        v.selection.stroke = Stroke::new(1.0_f32, Color32::WHITE);
         v.hyperlink_color = p.ring;
         v.warn_fg_color = rgb(0xf2d28b);
         v.error_fg_color = rgb(0xffaaaa);
         v.window_rounding = egui::Rounding::same(16.0);
         v.menu_rounding = egui::Rounding::same(12.0);
-        v.window_stroke = Stroke::new(1.0, p.border);
+        v.window_stroke = Stroke::new(1.0_f32, p.border);
         v.interact_cursor = Some(egui::CursorIcon::PointingHand);
         for widget in [
             &mut v.widgets.inactive,
@@ -147,7 +147,7 @@ impl Theme {
             &mut v.widgets.open,
         ] {
             widget.rounding = egui::Rounding::same(99.0);
-            widget.fg_stroke = Stroke::new(1.5, Color32::WHITE);
+            widget.fg_stroke = Stroke::new(1.5_f32, Color32::WHITE);
             widget.expansion = 0.0;
         }
         v.widgets.inactive.bg_fill = p.accent;
@@ -155,17 +155,17 @@ impl Theme {
         v.widgets.inactive.bg_stroke = Stroke::NONE;
         v.widgets.hovered.bg_fill = p.accent_hover;
         v.widgets.hovered.weak_bg_fill = p.accent_hover;
-        v.widgets.hovered.bg_stroke = Stroke::new(1.0, p.ring);
+        v.widgets.hovered.bg_stroke = Stroke::new(1.0_f32, p.ring);
         v.widgets.active.bg_fill = p.primary_hover;
         v.widgets.active.weak_bg_fill = p.primary_hover;
-        v.widgets.active.bg_stroke = Stroke::new(1.0, p.ring);
+        v.widgets.active.bg_stroke = Stroke::new(1.0_f32, p.ring);
         v.widgets.open.bg_fill = p.accent_hover;
         v.widgets.open.weak_bg_fill = p.accent_hover;
-        v.widgets.open.bg_stroke = Stroke::new(1.0, p.ring);
+        v.widgets.open.bg_stroke = Stroke::new(1.0_f32, p.ring);
         v.widgets.noninteractive.bg_fill = p.surface;
         v.widgets.noninteractive.weak_bg_fill = p.surface;
-        v.widgets.noninteractive.bg_stroke = Stroke::new(1.0, p.border);
-        v.widgets.noninteractive.fg_stroke = Stroke::new(1.0, p.muted);
+        v.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, p.border);
+        v.widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, p.muted);
         style.spacing.item_spacing = egui::vec2(12.0, 14.0);
         style.spacing.button_padding = egui::vec2(20.0, 9.0);
         style.spacing.interact_size = egui::vec2(40.0, 32.0);
@@ -207,7 +207,7 @@ pub fn button(
                 let v = ui.visuals_mut();
                 v.widgets.inactive.weak_bg_fill = primary;
                 v.widgets.hovered.weak_bg_fill = primary_hover;
-                v.widgets.hovered.bg_stroke = Stroke::new(1.0, hover);
+                v.widgets.hovered.bg_stroke = Stroke::new(1.0_f32, hover);
             }
             ui.add_sized(
                 size,
