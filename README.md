@@ -1,76 +1,45 @@
-# **Beat Saber Mapping Extractor**
+# Asset Extractor
 
-This tool allows you to extract and process Unity asset files (such as `.gz.asset`) for Beat Saber maps. It simplifies the process of converting and exporting assets for use or further modification.
+A Rust desktop app for extracting Unity bundles on Linux and Windows, with automatic Beat Saber map metadata generation.
 
-> ⚠️ **Disclaimer**: This tool is provided for **educational purposes only**. Use it responsibly and respect the rights of content creators.
+## Get started
 
----
+Download the appropriate AppImage or Windows executable from [GitHub Releases](https://github.com/TheDoctorTTV/Beat-Saber-Mapping-Extractor/releases).
 
-## **Features**
-- Extract Unity asset bundles with a user-friendly GUI.
-- Convert `.gz.asset` files to `.dat` files easily.
-- Automates the process of preparing assets for use in tools like **AssetStudio**.
+- **Linux:** make the AppImage executable and open it. Integrate it with Gear Lever for a menu shortcut.
+- **Windows:** open the `.exe`. Builds are unsigned.
 
----
+In **Home**, select a bundle, choose **Extract**, and select an output destination. Extensionless bundles are supported. Each extraction creates its own folder; existing folders prompt you to choose a new name, overwrite, or cancel. Overwrite replaces the entire previous folder.
 
-## **Tools Included**
-1. **extract_unity_assets.exe**
-   - Extracts raw Unity asset bundles and saves them for inspection.
-   - Saves all extracted data into an organized folder.
+The app exports supported assets, expands gzip TextAssets into `.dat` files, and generates a v4.0.1 `Info.dat`. Review **Console** for warnings before using the result as a song package. Unsupported assets may be preserved as raw files rather than playable media.
 
-2. **convert_gz_to_dat.exe**
-   - Converts `.gz.asset` files into `.dat` files for further use.
+For built-in Beat Saber songs, open the original bundle under `Beat Saber_Data/StreamingAssets/BeatmapLevelsData`. Keep the sibling `StreamingAssets/aa` folder available so the app can resolve environment settings.
 
----
+**Settings** offers saved themes and a default output folder. **About** provides release checks and executable updates. AppImages update through Gear Lever or manual replacement; the built-in updater is hidden when Gear Lever registration is detected at startup.
 
-## **How to Use the Tools**
+## Build
 
-### **Step 1: Extract Unity Assets**
-1. Place your **asset bundle file** in the root folder (where the `.exe` files are located).
-2. Run `extract_unity_assets.exe`.
-3. A GUI will open. Press **"Browse File"**.
-4. Locate and open your Unity asset file.
-5. The tool will:
-   - Extract the raw asset bundle into an `extracted_assets` folder.
-   - Save the `raw_asset_bundle.unity3d` file for further use.
+Install current stable [Rust](https://rustup.rs/) and the platform prerequisites in [docs.md](docs.md#build-prerequisites). Run from the repository:
 
----
+| Build | Command | Output |
+| --- | --- | --- |
+| Linux AppImage | `./build_linux.sh` | `dist/linux` |
+| Windows on Windows | `build_windows.bat` or `./build_windows.ps1` | `dist/windows` |
+| Windows from Linux | `./build_windows.sh` | `dist/windows` |
+| Both from Linux | `./build_all.sh` | Both platform folders |
 
-### **Step 2: Use AssetStudio to Export Assets**
-1. Download **[AssetStudio](https://github.com/Perfare/AssetStudio)**.
-2. Open `AssetStudioGUI.exe`.
-3. Drag the `raw_asset_bundle.unity3d` file (from the `extracted_assets` folder) into AssetStudio.
-4. In AssetStudio:
-   - Click **"Export"** at the top.
-   - Select **"All Assets"**.
-   - Choose the folder where you want to save the exported files.
+Windows cross-builds default to x86_64. Pass `aarch64` to `build_windows.sh` or `build_all.sh` for ARM64 Windows. Linux builds for the current Rust host target. The combined script stops if either build fails.
 
----
+Linux outputs an AppImage, `.zsync`, and `.sha256`; Windows outputs one versioned `.exe` and its `.sha256` for supported release targets. Build scripts prepare files without publishing releases or running tests.
 
-### **Step 3: Convert `.gz.asset` Files to `.dat` Files**
-1. Run `convert_gz_to_dat.exe`.
-2. When the GUI opens:
-   - Browse for the **"TextAsset"** folder exported by AssetStudio.
-   - Select the folder where you want to save the converted `.dat` files.
-3. The tool will convert all `.gz.asset` files into `.dat` files.
+The Cargo package is `asset-extractor`; release filenames retain the `beat-saber-mapping-extractor` prefix for updater compatibility.
 
----
+## Documentation
 
-## **Requirements**
-- **AssetStudio** (for inspecting and exporting assets)
+See [docs.md](docs.md) for export behavior, metadata fallbacks, output recovery, updater details, dependencies, troubleshooting, and publishing instructions.
 
----
+## Credits
 
-## **Disclaimer**
-This tool is for **educational purposes only**. It is not intended to infringe on any copyrights or violate any terms of service. Please use responsibly and respect the rights of all content creators.
+Built with [unity-rs-core](https://github.com/seiunx-dev/unity-rs), [egui/eframe](https://github.com/emilk/egui), and [self-replace](https://github.com/mitsuhiko/self-replace). See their licenses and those of their dependencies.
 
----
-
-## **License**
-This project is open-source and licensed under the MIT License.
-
----
-
-## **Credits**
-- **[AssetStudio](https://github.com/Perfare/AssetStudio)** for asset inspection and exporting.
-- Built with Python and `UnityPy`.
+For educational use. Respect content creators’ rights and applicable terms of service.

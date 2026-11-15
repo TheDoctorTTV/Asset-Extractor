@@ -1,25 +1,20 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# PyInstaller build folders
-/build/
+# Rust build artifacts and packaged binaries
+/target/
 /dist/
-/*.spec
 
-# Python virtual environments
+# Legacy Python environments
 .venv/
 env/
 venv/
+__pycache__/
+*.py[cod]
 
-# VSCode settings (optional)
+# Extracted content
+/extracted_assets/
+
+# Editor and system files
 .vscode/
-
-# OS-specific
 .DS_Store
 Thumbs.db
-
-# Logs / temp
 *.log
 *.tmp
