@@ -440,7 +440,8 @@ impl ExtractorApp {
                         [field_width, 38.0],
                         egui::TextEdit::singleline(&mut self.bundle)
                             .hint_text("Select a Unity bundle")
-                            .margin(egui::vec2(16.0, 9.0)),
+                            .margin(egui::vec2(16.0, 9.0))
+                            .vertical_align(egui::Align::Center),
                     );
                     if theme::button(ui, "Browse", [135.0, 38.0], false, 13.0).clicked() {
                         if let Some(path) = rfd::FileDialog::new()
@@ -576,15 +577,22 @@ impl ExtractorApp {
             ui.add_space(8.0);
             ui.add_enabled_ui(self.draft.use_default_folder, |ui| {
                 ui.horizontal(|ui| {
+                    let browse_width = 100.0;
+                    let field_width = (ui.available_width()
+                        - browse_width
+                        - ui.spacing().item_spacing.x)
+                        .clamp(150.0, 400.0);
                     ui.add_sized(
-                        [
-                            400.0_f32.min((ui.available_width() - 100.0).max(150.0)),
-                            32.0,
-                        ],
+                        [field_width, 32.0],
                         egui::TextEdit::singleline(&mut self.draft.default_folder)
-                            .hint_text("Output folder"),
+                            .hint_text("Output folder")
+                            .margin(egui::vec2(16.0, 7.0))
+                            .vertical_align(egui::Align::Center),
                     );
-                    if ui.button("Browse...").clicked() {
+                    if ui
+                        .add_sized([browse_width, 32.0], egui::Button::new("Browse..."))
+                        .clicked()
+                    {
                         if let Some(path) = rfd::FileDialog::new()
                             .set_title("Default extraction folder")
                             .pick_folder()
@@ -652,10 +660,10 @@ impl ExtractorApp {
                     ui.horizontal_wrapped(|ui| {
                         ui.label("Created by");
                         ui.hyperlink_to(
-                            RichText::new(avatar::USERNAME).strong(),
-                            avatar::PROFILE_URL,
+                            RichText::new("TheDoctorTTV").strong(),
+                            "https://github.com/TheDoctorTTV/Beat-Saber-Mapping-Extractor",
                         )
-                        .on_hover_text(&self.avatar_status);
+                        .on_hover_text("Beat-Saber-Mapping-Extractor");
                     });
                 });
                 ui.add_space(26.0);

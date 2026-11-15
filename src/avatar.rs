@@ -3,8 +3,6 @@ use std::{
     time::Duration,
 };
 
-pub const USERNAME: &str = "TheDoctorTTV";
-pub const PROFILE_URL: &str = "https://github.com/TheDoctorTTV";
 pub const AVATAR_URL: &str = "https://avatars.githubusercontent.com/u/39390981?s=96&v=4";
 const MAX_AVATAR_BYTES: u64 = 4 * 1024 * 1024;
 
