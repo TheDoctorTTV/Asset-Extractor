@@ -20,7 +20,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Cargo build failed with exit code $LASTEXITCODE" }
     $destination = Join-Path $PSScriptRoot 'dist/windows'
     New-Item -ItemType Directory -Force -Path $destination | Out-Null
-    Copy-Item -LiteralPath 'README.md' -Destination $destination -Force
+    Copy-Item -LiteralPath 'README.md', 'docs.md' -Destination $destination -Force
     $releaseArch = switch ($buildTarget) {
         'x86_64-pc-windows-msvc' { 'x86_64' }
         'aarch64-pc-windows-msvc' { 'aarch64' }

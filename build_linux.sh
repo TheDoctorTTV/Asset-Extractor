@@ -52,7 +52,7 @@ trap 'rm -rf -- "$app_dir"' EXIT
 # mktemp creates private directories; the AppImage root must be readable by everyone.
 chmod 755 -- "$app_dir"
 mkdir -p -- "$app_dir/usr/share/applications" "$app_dir/usr/share/doc/beat-saber-mapping-extractor"
-cp README.md "$app_dir/usr/share/doc/beat-saber-mapping-extractor/README.md"
+cp README.md docs.md "$app_dir/usr/share/doc/beat-saber-mapping-extractor/"
 cat > "$app_dir/usr/share/applications/$app_id.desktop" <<EOF
 [Desktop Entry]
 Type=Application
