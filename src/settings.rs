@@ -12,8 +12,10 @@ pub struct Settings {
     pub theme: crate::theme::Theme,
     pub use_default_folder: bool,
     pub default_folder: String,
+    pub close_to_tray: bool,
     pub update_channel: crate::updater::Channel,
     pub update_check_interval: crate::updater::CheckInterval,
+    pub automatic_updates: bool,
 }
 
 pub fn config_dir() -> io::Result<PathBuf> {

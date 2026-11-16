@@ -6,9 +6,12 @@ mod avatar;
 mod desktop;
 mod environments;
 mod jobs;
+#[cfg(target_os = "linux")]
+mod linux_window;
 mod map_info;
 mod settings;
 mod theme;
+mod tray;
 mod updater;
 
 use eframe::egui;
@@ -34,6 +37,11 @@ fn main() -> eframe::Result<()> {
             height,
         });
     }
+    #[cfg(target_os = "linux")]
+    {
+        linux_window::run(viewport)
+    }
+    #[cfg(not(target_os = "linux"))]
     eframe::run_native(
         "Asset Extractor",
         eframe::NativeOptions {

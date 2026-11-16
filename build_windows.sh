@@ -28,19 +28,19 @@ if ! command -v cargo-xwin >/dev/null 2>&1; then
 fi
 # Debian exposes clang-cl with a version suffix in /usr/bin, while LLVM's
 # private bin directory contains the unversioned names cargo-xwin needs.
-if ! command -v clang-cl >/dev/null 2>&1 || ! command -v lld-link >/dev/null 2>&1; then
+if ! command -v clang-cl >/dev/null 2>&1 || ! command -v lld-link >/dev/null 2>&1 || ! command -v llvm-rc >/dev/null 2>&1; then
     clang_bin_dir=""
     if command -v clang >/dev/null 2>&1; then
         clang_bin_dir="$(dirname -- "$(readlink -f -- "$(command -v clang)")")"
     fi
     for llvm_bin_dir in "$clang_bin_dir" /usr/lib/llvm-*/bin; do
-        if [[ -x "$llvm_bin_dir/clang-cl" && -x "$llvm_bin_dir/lld-link" ]]; then
+        if [[ -x "$llvm_bin_dir/clang-cl" && -x "$llvm_bin_dir/lld-link" && -x "$llvm_bin_dir/llvm-rc" ]]; then
             export PATH="$llvm_bin_dir:$PATH"
             break
         fi
     done
 fi
-for tool in clang-cl lld-link; do
+for tool in clang-cl lld-link llvm-rc; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "$tool is missing from PATH. Install Clang/LLVM and LLD." >&2
         if command -v apt-get >/dev/null 2>&1; then

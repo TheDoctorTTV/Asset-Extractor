@@ -121,6 +121,10 @@ impl Theme {
     }
 
     pub fn apply(self, ctx: &egui::Context) {
+        // Every app palette uses dark visuals. Select that style explicitly
+        // before customizing it so a later OS light-theme report cannot switch
+        // startup rendering back to egui's unstyled light widgets.
+        ctx.set_theme(egui::Theme::Dark);
         let p = self.palette();
         let mut style = (*ctx.style()).clone();
         style.visuals = egui::Visuals::dark();

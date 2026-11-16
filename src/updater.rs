@@ -152,6 +152,7 @@ pub struct Updater {
     enabled: bool,
     pub channel: Channel,
     pub interval: CheckInterval,
+    pub automatic_updates: bool,
     releases: Vec<Release>,
     selected: usize,
     receiver: Option<Receiver<Event>>,
@@ -161,16 +162,19 @@ pub struct Updater {
     progress: f32,
     checked: bool,
     startup: bool,
+    automatic_check: bool,
+    pending_automatic_install: Option<String>,
     next_check: Instant,
     cancel: Arc<AtomicBool>,
 }
 
 impl Updater {
-    pub fn new(channel: Channel, interval: CheckInterval) -> Self {
+    pub fn new(channel: Channel, interval: CheckInterval, automatic_updates: bool) -> Self {
         Self {
             enabled: !gear_lever_manages_updates(),
             channel,
             interval,
+            automatic_updates,
             releases: Vec::new(),
             selected: 0,
             receiver: None,
@@ -180,6 +184,8 @@ impl Updater {
             progress: 0.0,
             checked: false,
             startup: true,
+            automatic_check: false,
+            pending_automatic_install: None,
             next_check: Instant::now(),
             cancel: Arc::new(AtomicBool::new(false)),
         }
@@ -197,9 +203,14 @@ impl Updater {
             .is_some_and(|release| release.version > current_version())
     }
     pub fn check(&mut self) {
+        self.start_check(false);
+    }
+    fn start_check(&mut self, automatic: bool) {
         if !self.enabled || self.receiver.is_some() || self.installed {
             return;
         }
+        self.pending_automatic_install = None;
+        self.automatic_check = automatic;
         let (tx, rx) = mpsc::channel();
         let channel = self.channel;
         match thread::Builder::new()
@@ -219,7 +230,7 @@ impl Updater {
         self.startup = false;
         self.next_check = Instant::now() + Duration::from_secs(self.interval.seconds());
     }
-    pub fn tick(&mut self, ctx: &egui::Context) -> Option<PathBuf> {
+    pub fn tick(&mut self, ctx: &egui::Context, extraction_busy: bool) -> Option<PathBuf> {
         if !self.enabled {
             return None;
         }
@@ -231,6 +242,7 @@ impl Updater {
             match event {
                 Ok(Event::Checked(result)) => {
                     self.receiver = None;
+                    let automatic = std::mem::take(&mut self.automatic_check);
                     match result {
                         Ok(releases) => {
                             let previous = self.releases.get(self.selected).map(|r| r.tag.clone());
@@ -259,6 +271,18 @@ impl Updater {
                                 "No compatible download available"
                             }
                             .into();
+                            if automatic && self.automatic_updates {
+                                // Only a newer compatible release from the startup
+                                // check is eligible for unattended installation.
+                                self.pending_automatic_install = self
+                                    .releases
+                                    .iter()
+                                    .find(|release| {
+                                        release.binary.is_some()
+                                            && release.version > current_version()
+                                    })
+                                    .map(|release| release.tag.clone());
+                            }
                         }
                         Err(err) => self.status = format!("Update check failed: {err}"),
                     }
@@ -291,14 +315,36 @@ impl Updater {
                 }
             }
         }
+        if !self.automatic_updates {
+            self.pending_automatic_install = None;
+        }
+        if self.receiver.is_none() && !self.installed {
+            if let Some(tag) = self.pending_automatic_install.clone() {
+                if extraction_busy {
+                    self.status =
+                        "Update available. Waiting for extraction before automatic installation..."
+                            .into();
+                } else {
+                    self.pending_automatic_install = None;
+                    if let Some(index) = self.releases.iter().position(|release| release.tag == tag)
+                    {
+                        self.selected = index;
+                        self.install();
+                    }
+                }
+            }
+        }
         if !self.installed
+            && self.pending_automatic_install.is_none()
             && (self.startup || (self.interval.seconds() != 0 && Instant::now() >= self.next_check))
         {
-            self.check();
+            self.start_check(self.startup && self.automatic_updates);
         }
         if self.receiver.is_some() {
             ctx.request_repaint_after(Duration::from_millis(80));
-        } else if !self.installed && self.interval.seconds() != 0 {
+        } else if !self.installed
+            && (self.interval.seconds() != 0 || self.pending_automatic_install.is_some())
+        {
             ctx.request_repaint_after(Duration::from_secs(1));
         }
         None
@@ -307,6 +353,7 @@ impl Updater {
         if !self.enabled || self.receiver.is_some() || self.installed {
             return;
         }
+        self.pending_automatic_install = None;
         let Some(release) = self.releases.get(self.selected) else {
             return;
         };
@@ -346,6 +393,7 @@ impl Updater {
         }
         let old_channel = self.channel;
         let old_interval = self.interval;
+        let old_automatic_updates = self.automatic_updates;
         let busy = self.receiver.is_some() || self.installed;
         let installable = self
             .releases
@@ -392,6 +440,15 @@ impl Updater {
                 .desired_height(6.0)
                 .animate(active),
         );
+        ui.add_space(8.0);
+        ui.checkbox(
+            &mut self.automatic_updates,
+            "Automatically install updates at startup",
+        );
+        ui.small("On launch, download and install a newer version from the selected channel, then restart. Waits for any active extraction to finish.");
+        if !self.automatic_updates {
+            self.pending_automatic_install = None;
+        }
         ui.add_space(8.0);
         // Match stream247's labeled fields, wrapping whole fields on small windows.
         let field_width = ((ui.available_width() - 24.0) / 3.0)
@@ -472,7 +529,9 @@ impl Updater {
         if extraction_busy {
             ui.small("Finish or cancel extraction before installing an update.");
         }
-        channel_changed || old_interval != self.interval
+        channel_changed
+            || old_interval != self.interval
+            || old_automatic_updates != self.automatic_updates
     }
 }
 impl Drop for Updater {

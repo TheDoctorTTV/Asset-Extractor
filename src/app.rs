@@ -3,6 +3,7 @@ use crate::{
     jobs::{self, Destination, Event},
     settings::Settings,
     theme::{self, Theme},
+    tray::{self, Tray},
     updater::Updater,
 };
 use eframe::egui::{self, Color32, RichText};
@@ -42,6 +43,13 @@ pub struct ExtractorApp {
     settings: Settings,
     draft: Settings,
     settings_status: String,
+    tray: Option<Tray>,
+    tray_attempted: bool,
+    tray_actions: tray::Actions,
+    #[cfg(target_os = "linux")]
+    window_in_tray: bool,
+    #[cfg(target_os = "linux")]
+    window_size: [f32; 2],
     receiver: Option<Receiver<Event>>,
     conflict: Option<ExtractionConflict>,
     cancel: Arc<AtomicBool>,
@@ -72,11 +80,22 @@ impl ExtractorApp {
         }
         Self {
             page: Page::Home,
-            updater: Updater::new(settings.update_channel, settings.update_check_interval),
+            updater: Updater::new(
+                settings.update_channel,
+                settings.update_check_interval,
+                settings.automatic_updates,
+            ),
             bundle: String::new(),
             draft: settings.clone(),
             settings,
             settings_status,
+            tray: None,
+            tray_attempted: false,
+            tray_actions: tray::Actions::new(cc.egui_ctx.clone()),
+            #[cfg(target_os = "linux")]
+            window_in_tray: false,
+            #[cfg(target_os = "linux")]
+            window_size: [1105.0, 880.0],
             receiver: None,
             conflict: None,
             cancel: Arc::new(AtomicBool::new(false)),
@@ -568,6 +587,19 @@ impl ExtractorApp {
             ui.add_space(18.0);
             ui.separator();
             ui.add_space(12.0);
+            ui.heading("Window behavior");
+            if ui.checkbox(&mut self.draft.close_to_tray, "Close to system tray").changed() {
+                self.settings.close_to_tray = self.draft.close_to_tray;
+                ui.ctx().request_repaint();
+                self.settings_status = match self.settings.save() {
+                    Ok(()) => "Window behavior saved.".into(),
+                    Err(err) => format!("Window behavior applied, but could not save it: {err}"),
+                };
+            }
+            ui.small("Closing the window keeps the app running. Use the tray menu to show it again or quit.");
+            ui.add_space(18.0);
+            ui.separator();
+            ui.add_space(12.0);
             ui.heading("Save location");
             ui.add_space(12.0);
             ui.checkbox(
@@ -667,6 +699,8 @@ impl ExtractorApp {
                     });
                 });
                 if !self.updater.enabled() {
+                    ui.add_space(16.0);
+                    ui.label("Updates for this AppImage are managed by Gear Lever.");
                     return;
                 }
                 ui.add_space(26.0);
@@ -680,6 +714,8 @@ impl ExtractorApp {
                     self.settings.update_check_interval = self.updater.interval;
                     self.draft.update_channel = self.updater.channel;
                     self.draft.update_check_interval = self.updater.interval;
+                    self.settings.automatic_updates = self.updater.automatic_updates;
+                    self.draft.automatic_updates = self.updater.automatic_updates;
                     if let Err(err) = self.settings.save() {
                         self.updater.status = format!("Could not save update preferences: {err}");
                         self.log(self.updater.status.clone());
@@ -689,11 +725,107 @@ impl ExtractorApp {
     }
 }
 
-impl eframe::App for ExtractorApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+impl ExtractorApp {
+    fn show_window(&mut self, ctx: &egui::Context) {
+        #[cfg(target_os = "linux")]
+        {
+            self.window_in_tray = false;
+        }
+        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn window_size(&self) -> [f32; 2] {
+        self.window_size
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn attach_window(&mut self, cc: &eframe::CreationContext<'_>) {
+        theme::install_fonts(&cc.egui_ctx);
+        self.settings.theme.apply(&cc.egui_ctx);
+        self.tray_actions.set_context(Some(cc.egui_ctx.clone()));
+        self.window_in_tray = false;
+        // Texture handles belong to the old renderer. Reload the optional avatar
+        // while retaining all application data, workers and update state.
+        self.avatar = None;
+        self.avatar_requested = None;
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn wait_in_tray(&mut self) -> bool {
+        if !self.window_in_tray || self.tray_actions.is_quitting() {
+            return false;
+        }
+        // No graphical window or renderer exists during this loop. Tray callbacks
+        // wake it directly; extraction/update channels are serviced periodically.
+        self.tray_actions.set_context(None);
+        let ctx = egui::Context::default();
+        while self.window_in_tray
+            && !self.tray_actions.is_quitting()
+            && self.settings.close_to_tray
+        {
+            self.background_tick(&ctx);
+            if self.conflict.is_some() {
+                self.show_window(&ctx);
+            }
+            if self.window_in_tray && !self.tray_actions.is_quitting() {
+                self.tray_actions.wait(Duration::from_millis(100));
+            }
+        }
+        !self.tray_actions.is_quitting()
+    }
+
+    fn background_tick(&mut self, ctx: &egui::Context) {
+        // Start the tray when enabled, rather than waiting for the first close.
+        if self.settings.close_to_tray && !self.tray_attempted {
+            self.tray_attempted = true;
+            match Tray::new(self.tray_actions.clone()) {
+                Ok(tray) => self.tray = Some(tray),
+                Err(err) => {
+                    self.settings_status = format!("Could not open the system tray: {err}. Disable Close to system tray to exit normally.");
+                    self.log(self.settings_status.clone());
+                }
+            }
+        } else if !self.settings.close_to_tray {
+            self.tray = None;
+            self.tray_attempted = false;
+        }
+        // Tray callbacks wake either the window event loop or the Linux tray
+        // wait loop. All application and window changes stay on the main thread.
+        for action in self.tray_actions.take() {
+            match action {
+                tray::Action::Show | tray::Action::Unavailable => {
+                    self.show_window(ctx);
+                    if matches!(action, tray::Action::Unavailable) {
+                        self.settings_status = "System tray unavailable. The window will stay open; disable Close to system tray to exit normally.".into();
+                        self.log(self.settings_status.clone());
+                        self.page = Page::Settings;
+                    }
+                }
+                tray::Action::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+                tray::Action::CheckUpdates => {
+                    self.page = Page::About;
+                    self.updater.check();
+                    self.show_window(ctx);
+                }
+                tray::Action::VisitWebsite | tray::Action::OpenRepository => {
+                    let url = match action {
+                        tray::Action::VisitWebsite => "https://thetimevortex.net",
+                        _ => "https://github.com/TheDoctorTTV/Asset-Extractor",
+                    };
+                    if let Err(err) = open::that_detached(url) {
+                        self.log(format!("Could not open {url}: {err}"));
+                    }
+                }
+            }
+        }
         self.poll(ctx);
         let update_status = self.updater.status.clone();
-        let restart = self.updater.tick(ctx);
+        let restart = self
+            .updater
+            .tick(ctx, self.receiver.is_some() || self.conflict.is_some());
         if self.updater.status != update_status && !self.updater.installing {
             self.log(format!("Updates: {}", self.updater.status));
         }
@@ -720,7 +852,7 @@ impl eframe::App for ExtractorApp {
                 }
             }
             match command.spawn() {
-                Ok(_) => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+                Ok(_) => self.tray_actions.quit(),
                 Err(err) => {
                     self.updater.status = format!("Update installed. Close and reopen the app to finish; automatic restart failed: {err}");
                     self.log(self.updater.status.clone());
@@ -729,6 +861,39 @@ impl eframe::App for ExtractorApp {
         }
         if self.receiver.is_some() || self.avatar_receiver.is_some() {
             ctx.request_repaint_after(Duration::from_millis(80));
+        }
+    }
+}
+
+impl eframe::App for ExtractorApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.background_tick(ctx);
+        #[cfg(target_os = "linux")]
+        if let Some(rect) = ctx.input(|input| input.viewport().inner_rect) {
+            self.window_size = [rect.width().max(720.0), rect.height().max(600.0)];
+        }
+        if ctx.input(|input| input.viewport().close_requested())
+            && self.settings.close_to_tray
+            && !self.tray_actions.is_quitting()
+        {
+            if self.tray.as_ref().is_some_and(Tray::available) {
+                #[cfg(target_os = "linux")]
+                {
+                    // Let eframe destroy the native window. The Linux host keeps
+                    // this app alive and recreates the window on tray activation.
+                    self.window_in_tray = true;
+                }
+                #[cfg(not(target_os = "linux"))]
+                {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+                }
+            } else {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                self.settings_status = "System tray unavailable. The window will stay open; disable Close to system tray to exit normally.".into();
+                self.log(self.settings_status.clone());
+                self.page = Page::Settings;
+            }
         }
         let palette = self.settings.theme.palette();
         egui::CentralPanel::default()
