@@ -1,4 +1,6 @@
 use eframe::egui;
+#[cfg(target_os = "windows")]
+use std::sync::atomic::AtomicIsize;
 use std::sync::{
     atomic::{AtomicBool, AtomicU8, Ordering},
     Arc, Mutex,
@@ -9,6 +11,8 @@ pub struct Actions {
     ctx: Arc<Mutex<Option<egui::Context>>>,
     quitting: Arc<AtomicBool>,
     pending: Arc<AtomicU8>,
+    #[cfg(target_os = "windows")]
+    window: Arc<AtomicIsize>,
     #[cfg(target_os = "linux")]
     wake: Arc<(Mutex<()>, std::sync::Condvar)>,
 }
@@ -16,6 +20,7 @@ pub struct Actions {
 #[derive(Clone, Copy)]
 pub enum Action {
     Show,
+    Toggle,
     CheckUpdates,
     VisitWebsite,
     OpenRepository,
@@ -29,6 +34,8 @@ impl Actions {
             ctx: Arc::new(Mutex::new(Some(ctx))),
             quitting: Arc::new(AtomicBool::new(false)),
             pending: Arc::new(AtomicU8::new(0)),
+            #[cfg(target_os = "windows")]
+            window: Arc::new(AtomicIsize::new(0)),
             #[cfg(target_os = "linux")]
             wake: Arc::new((Mutex::new(()), std::sync::Condvar::new())),
         }
@@ -38,9 +45,22 @@ impl Actions {
         self.send(1);
     }
 
+    pub fn toggle(&self) {
+        self.send(64);
+    }
+
     pub fn quit(&self) {
-        self.quitting.store(true, Ordering::Relaxed);
+        self.mark_quitting();
         self.send(2);
+    }
+
+    pub fn mark_quitting(&self) {
+        self.quitting.store(true, Ordering::Relaxed);
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn set_window(&self, window: isize) {
+        self.window.store(window, Ordering::Relaxed);
     }
 
     pub fn check_updates(&self) {
@@ -76,6 +96,25 @@ impl Actions {
         if let Some(ctx) = ctx {
             ctx.request_repaint();
         }
+        #[cfg(target_os = "windows")]
+        {
+            // Normal redraw scheduling can wait for a visible window. Posting
+            // a paint message explicitly also delivers Show/Quit/IPC actions
+            // while the native window is hidden in the tray.
+            let window = self.window.load(Ordering::Relaxed);
+            if window != 0 {
+                // SAFETY: PostMessageW queues a message without dereferencing
+                // the HWND here; an already-destroyed handle simply fails.
+                unsafe {
+                    windows_sys::Win32::UI::WindowsAndMessaging::PostMessageW(
+                        window as *mut std::ffi::c_void,
+                        windows_sys::Win32::UI::WindowsAndMessaging::WM_PAINT,
+                        0,
+                        0,
+                    );
+                }
+            }
+        }
     }
 
     #[cfg(target_os = "linux")]
@@ -96,6 +135,11 @@ impl Actions {
         let mut actions = Vec::new();
         if pending & 1 != 0 {
             actions.push(Action::Show);
+        }
+        // Explicit activation (another launch, Show, or update check) wins over
+        // a simultaneous tray toggle so it never leaves the requested UI hidden.
+        if pending & 64 != 0 && pending & (1 | 4 | 8) == 0 {
+            actions.push(Action::Toggle);
         }
         if pending & 8 != 0 {
             actions.push(Action::CheckUpdates);
@@ -144,7 +188,7 @@ impl ksni::Tray for LinuxTray {
     }
 
     fn activate(&mut self, _x: i32, _y: i32) {
-        self.actions.show();
+        self.actions.toggle();
     }
 
     fn watcher_offline(&self, _reason: ksni::OfflineReason) -> bool {
@@ -279,13 +323,6 @@ impl Tray {
         let (width, height) = image.dimensions();
         let icon =
             Icon::from_rgba(image.into_raw(), width, height).map_err(|err| err.to_string())?;
-        let icon = TrayIconBuilder::new()
-            .with_tooltip("Asset Extractor")
-            .with_menu(Box::new(menu))
-            .with_menu_on_left_click(false)
-            .with_icon(icon)
-            .build()
-            .map_err(|err| err.to_string())?;
         let show_id = show.id().clone();
         let check_id = check.id().clone();
         let website_id = website.id().clone();
@@ -299,12 +336,9 @@ impl Tray {
                     button: MouseButton::Left,
                     button_state: MouseButtonState::Up,
                     ..
-                } | TrayIconEvent::DoubleClick {
-                    button: MouseButton::Left,
-                    ..
                 }
             ) {
-                click_actions.show();
+                click_actions.toggle();
             }
         }));
         MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
@@ -320,6 +354,15 @@ impl Tray {
                 actions.quit();
             }
         }));
+        // Install process-lifetime handlers before showing the icon, so an
+        // early native event cannot initialize the crate's handler to None.
+        let icon = TrayIconBuilder::new()
+            .with_tooltip("Asset Extractor")
+            .with_menu(Box::new(menu))
+            .with_menu_on_left_click(false)
+            .with_icon(icon)
+            .build()
+            .map_err(|err| err.to_string())?;
         Ok(Self { _icon: icon })
     }
 

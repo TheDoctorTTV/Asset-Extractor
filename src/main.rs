@@ -10,6 +10,7 @@ mod jobs;
 mod linux_window;
 mod map_info;
 mod settings;
+mod single_instance;
 mod theme;
 mod tray;
 mod updater;
@@ -17,6 +18,18 @@ mod updater;
 use eframe::egui;
 
 fn main() -> eframe::Result<()> {
+    let instance = match single_instance::Instance::acquire() {
+        Ok(Some(instance)) => instance,
+        Ok(None) => return Ok(()),
+        Err(err) => {
+            rfd::MessageDialog::new()
+                .set_title("Asset Extractor")
+                .set_description(err.to_string())
+                .set_level(rfd::MessageLevel::Error)
+                .show();
+            return Err(eframe::Error::AppCreation(Box::new(err)));
+        }
+    };
     #[cfg(target_os = "linux")]
     if let Err(error) = desktop::register() {
         eprintln!("Could not register desktop icon: {error}");
@@ -39,7 +52,7 @@ fn main() -> eframe::Result<()> {
     }
     #[cfg(target_os = "linux")]
     {
-        linux_window::run(viewport)
+        linux_window::run(viewport, &instance)
     }
     #[cfg(not(target_os = "linux"))]
     eframe::run_native(
@@ -48,6 +61,6 @@ fn main() -> eframe::Result<()> {
             viewport,
             ..Default::default()
         },
-        Box::new(|cc| Ok(Box::new(app::ExtractorApp::new(cc)))),
+        Box::new(|cc| Ok(Box::new(app::ExtractorApp::new(cc, &instance)))),
     )
 }

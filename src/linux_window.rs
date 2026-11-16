@@ -79,7 +79,10 @@ impl eframe::App for Window {
     }
 }
 
-pub fn run(viewport: egui::ViewportBuilder) -> eframe::Result<()> {
+pub fn run(
+    viewport: egui::ViewportBuilder,
+    instance: &crate::single_instance::Instance,
+) -> eframe::Result<()> {
     let app: SharedApp = Rc::new(RefCell::new(None));
     loop {
         let mut viewport = viewport.clone();
@@ -101,7 +104,7 @@ pub fn run(viewport: egui::ViewportBuilder) -> eframe::Result<()> {
                     if let Some(app) = state.as_mut() {
                         app.attach_window(cc);
                     } else {
-                        *state = Some(ExtractorApp::new(cc));
+                        *state = Some(ExtractorApp::new(cc, instance));
                     }
                 }
                 Ok(Box::new(Window {

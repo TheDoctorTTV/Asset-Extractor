@@ -46,7 +46,6 @@ pub struct ExtractorApp {
     tray: Option<Tray>,
     tray_attempted: bool,
     tray_actions: tray::Actions,
-    #[cfg(target_os = "linux")]
     window_in_tray: bool,
     #[cfg(target_os = "linux")]
     window_size: [f32; 2],
@@ -64,7 +63,7 @@ pub struct ExtractorApp {
 }
 
 impl ExtractorApp {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, instance: &crate::single_instance::Instance) -> Self {
         let (settings, settings_status) = match Settings::load() {
             Ok(settings) => (settings, String::new()),
             Err(err) => (
@@ -74,6 +73,17 @@ impl ExtractorApp {
         };
         theme::install_fonts(&cc.egui_ctx);
         settings.theme.apply(&cc.egui_ctx);
+        let tray_actions = tray::Actions::new(cc.egui_ctx.clone());
+        #[cfg(target_os = "windows")]
+        {
+            use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+            if let Ok(handle) = cc.window_handle() {
+                if let RawWindowHandle::Win32(window) = handle.as_raw() {
+                    tray_actions.set_window(window.hwnd.get());
+                }
+            }
+        }
+        instance.attach(tray_actions.clone());
         let mut logs = VecDeque::new();
         if !settings_status.is_empty() {
             logs.push_back(settings_status.clone());
@@ -91,8 +101,7 @@ impl ExtractorApp {
             settings_status,
             tray: None,
             tray_attempted: false,
-            tray_actions: tray::Actions::new(cc.egui_ctx.clone()),
-            #[cfg(target_os = "linux")]
+            tray_actions,
             window_in_tray: false,
             #[cfg(target_os = "linux")]
             window_size: [1105.0, 880.0],
@@ -727,10 +736,7 @@ impl ExtractorApp {
 
 impl ExtractorApp {
     fn show_window(&mut self, ctx: &egui::Context) {
-        #[cfg(target_os = "linux")]
-        {
-            self.window_in_tray = false;
-        }
+        self.window_in_tray = false;
         ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
         ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
         ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
@@ -805,6 +811,19 @@ impl ExtractorApp {
                     }
                 }
                 tray::Action::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+                tray::Action::Toggle => {
+                    if self.window_in_tray {
+                        self.show_window(ctx);
+                    } else if self.settings.close_to_tray
+                        && self.tray.as_ref().is_some_and(Tray::available)
+                    {
+                        self.window_in_tray = true;
+                        #[cfg(target_os = "linux")]
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        #[cfg(not(target_os = "linux"))]
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+                    }
+                }
                 tray::Action::CheckUpdates => {
                     self.page = Page::About;
                     self.updater.check();
@@ -831,6 +850,7 @@ impl ExtractorApp {
         }
         if let Some(path) = restart {
             let mut command = std::process::Command::new(path);
+            crate::single_instance::Instance::configure_restart(&mut command);
             #[cfg(target_os = "linux")]
             {
                 // The replacement runtime must establish its own AppImage paths.
@@ -877,12 +897,9 @@ impl eframe::App for ExtractorApp {
             && !self.tray_actions.is_quitting()
         {
             if self.tray.as_ref().is_some_and(Tray::available) {
-                #[cfg(target_os = "linux")]
-                {
-                    // Let eframe destroy the native window. The Linux host keeps
-                    // this app alive and recreates the window on tray activation.
-                    self.window_in_tray = true;
-                }
+                self.window_in_tray = true;
+                // Linux lets eframe destroy the native window. Its host keeps
+                // this app alive and recreates the window on tray activation.
                 #[cfg(not(target_os = "linux"))]
                 {
                     ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -924,6 +941,7 @@ impl eframe::App for ExtractorApp {
 
 impl Drop for ExtractorApp {
     fn drop(&mut self) {
+        self.tray_actions.mark_quitting();
         self.cancel.store(true, Ordering::Relaxed);
     }
 }

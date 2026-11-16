@@ -48,7 +48,9 @@ Schema references: [Info format](https://bsmg.wiki/mapping/map-format/info.html)
 
 Themes apply and save immediately. Default output-folder changes require **Save settings**. Settings use the current user’s configuration directory through `directories::ProjectDirs`, with organization `TheDoctorTTV` and application `AssetExtractor`.
 
-**Close to system tray** applies and saves immediately and is off by default. Enabling it shows the tray icon immediately; disabling it removes the icon. Closing the window keeps the app and any extraction running. Click the tray icon to reopen the window; its menu offers **Show Asset Extractor**, **Check for updates**, and **Quit**. The update check opens About to show its progress and result. If the tray cannot be created, the window stays open and Settings shows the error. On Linux, this uses the desktop’s StatusNotifier tray host; no GTK/AppIndicator library is required.
+**Close to system tray** applies and saves immediately and is off by default. Enabling it shows the tray icon immediately; disabling it removes the icon. Closing the window keeps the app and any extraction running. Click the tray icon to hide an open window or reopen a closed window; **Show Asset Extractor** in the menu always opens it. The menu also offers **Check for updates**, website/GitHub links, and **Quit**. The update check opens About to show its progress and result. If the tray cannot be created, the window stays open and Settings shows the error. On Linux, this uses the desktop’s StatusNotifier tray host; no GTK/AppIndicator library is required.
+
+Only one instance runs per user on Linux and Windows. Opening the executable or AppImage again asks the existing process to show its window and exits the new launch. The process lock remains held while the window is in the tray and is released on exit or a crash. Update restarts wait for the previous process to release the lock before starting the replacement. Already-running older versions must be exited once before testing this behavior because they do not participate in the lock.
 
 Linux uses the native Wayland backend in a Wayland session, with X11 available as a fallback. Closing to tray destroys the graphical window and renderer while preserving the app state, tray, extraction workers, and updater. Clicking the tray icon recreates the window with the previous size, inputs, logs, settings, and selected page. The optional About avatar is reloaded for the new renderer. Background extraction conflicts and a disappearing tray host reopen the window. This does not require XWayland. **Quit** or closing with the setting disabled exits the application normally.
 
@@ -68,7 +70,7 @@ Extraction works offline. Release checks and downloads require internet access. 
 
 ## Build prerequisites
 
-Use current stable Rust through rustup. The extraction backend requires at least Rust 1.88; other dependencies may require newer versions. Cargo downloads dependencies as needed. Keep `Cargo.lock` tracked.
+Use current stable Rust through rustup. The single-instance process lock requires at least Rust 1.89; platform dependencies may require newer versions. Cargo downloads dependencies as needed. Keep `Cargo.lock` tracked.
 
 ### Linux AppImage
 
