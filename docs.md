@@ -6,7 +6,7 @@
 
 Extraction runs in a background worker. Home lets you select a bundle, cancel extraction, and open the result. Console shows progress, filenames, and warnings, retains the latest 2,000 lines, and provides a Copy log button.
 
-The backend is `unity-rs-core` 0.5.0. Export behavior depends on the asset and codec:
+The backend is `unity-rs-core` 0.6.3. Export behavior depends on the asset and codec:
 
 | Asset | Output |
 | --- | --- |

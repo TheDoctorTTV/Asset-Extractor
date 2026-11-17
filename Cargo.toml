@@ -1,6 +1,6 @@
 [package]
 name = "asset-extractor"
-version = "1.0.1"
+version = "1.0.1-1"
 edition = "2021"
 description = "One-step Unity bundle asset extraction"
 publish = false
@@ -29,21 +29,27 @@ reqwest = { version = "0.12", default-features = false, features = [
     "blocking",
     "rustls-tls",
 ] }
-unity-rs-core = "=0.5.0"
+unity-rs-core = "=0.6.3"
 self-replace = "1.5.1"
 semver = "1"
 sha2 = "0.10"
 getrandom = "0.3"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-ksni = { version = "0.3.7", default-features = false, features = ["async-io", "blocking"] }
+ksni = { version = "0.3.7", default-features = false, features = [
+    "async-io",
+    "blocking",
+] }
 raw-window-handle = "0.6"
 wayland-client = { version = "0.31", features = ["system", "dlopen"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 raw-window-handle = "0.6"
 tray-icon = { version = "0.26.1", default-features = false }
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+] }
 
 [build-dependencies]
 embed-resource = "3.0"
