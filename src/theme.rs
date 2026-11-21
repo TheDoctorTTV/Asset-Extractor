@@ -19,6 +19,7 @@ pub enum Theme {
     RoseQuartz,
     #[serde(rename = "red")]
     Ruby,
+    Midnight,
     #[default]
     #[serde(rename = "purple", alias = "current", other)]
     Amethyst,
@@ -42,16 +43,18 @@ const fn rgb(hex: u32) -> Color32 {
 }
 
 impl Theme {
-    pub const ALL: [Self; 9] = [
-        Self::Amber,
+    // Ordered as the template's theme picker grid.
+    pub const ALL: [Self; 10] = [
         Self::Amethyst,
         Self::Cobalt,
-        Self::Ember,
-        Self::Evergreen,
-        Self::Graphite,
-        Self::Lagoon,
-        Self::RoseQuartz,
         Self::Ruby,
+        Self::Graphite,
+        Self::Evergreen,
+        Self::Lagoon,
+        Self::Amber,
+        Self::RoseQuartz,
+        Self::Ember,
+        Self::Midnight,
     ];
 
     pub fn label(self) -> &'static str {
@@ -63,8 +66,9 @@ impl Theme {
             Self::Evergreen => "Evergreen",
             Self::Graphite => "Graphite",
             Self::Lagoon => "Lagoon",
-            Self::RoseQuartz => "Rose Quartz",
+            Self::RoseQuartz => "Rose",
             Self::Ruby => "Ruby",
+            Self::Midnight => "Midnight",
         }
     }
 
@@ -98,8 +102,12 @@ impl Theme {
             Self::Ember => [
                 0x3b2c24, 0x30221b, 0x823b1b, 0x964721, 0xb94e18, 0xbf521b, 0xffb58b,
             ],
+            Self::Midnight => [
+                0x0f1c30, 0x0a1526, 0x1f4378, 0x28518f, 0x2f6bdb, 0x4a82ec, 0x9cc2ff,
+            ],
         };
         let (muted, border) = match self {
+            Self::Midnight => (0xbcc6d6, 0x4a5a74),
             Self::Evergreen => (0xbfd0c5, 0x5e7c6b),
             Self::Lagoon => (0xbdd0d1, 0x5c7b7e),
             Self::Amber => (0xd4cbb8, 0x807052),
@@ -238,6 +246,192 @@ pub fn button(
         };
         ui.painter()
             .set(shadow_slot, shadow.as_shape(response.rect, 99.0));
+    }
+    response
+}
+
+// Transparent pill with a border, used for low-emphasis actions (Cancel, Browse).
+pub fn outline_button(ui: &mut egui::Ui, label: &str, size: [f32; 2]) -> egui::Response {
+    ui.scope(|ui| {
+        let border = ui.visuals().widgets.noninteractive.bg_stroke.color;
+        let ring = ui.visuals().hyperlink_color;
+        let v = ui.visuals_mut();
+        v.widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
+        v.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, border);
+        v.widgets.hovered.weak_bg_fill = Color32::from_white_alpha(10);
+        v.widgets.hovered.bg_stroke = Stroke::new(1.0_f32, ring);
+        v.widgets.active.weak_bg_fill = Color32::from_white_alpha(18);
+        v.widgets.active.bg_stroke = Stroke::new(1.0_f32, ring);
+        ui.add_sized(
+            size,
+            egui::Button::new(RichText::new(label).size(13.0)),
+        )
+    })
+    .inner
+}
+
+// Round checkbox: filled with the primary color and a check mark when on.
+pub fn checkbox(ui: &mut egui::Ui, checked: &mut bool, label: &str) -> egui::Response {
+    const DIAMETER: f32 = 18.0;
+    let galley = ui.painter().layout_no_wrap(
+        label.to_owned(),
+        egui::TextStyle::Body.resolve(ui.style()),
+        ui.visuals().text_color(),
+    );
+    let size = egui::vec2(DIAMETER + 8.0 + galley.size().x, DIAMETER.max(galley.size().y) + 4.0);
+    let (rect, mut response) = ui.allocate_exact_size(size, egui::Sense::click());
+    if response.clicked() {
+        *checked = !*checked;
+        response.mark_changed();
+    }
+    let enabled = ui.is_enabled();
+    let state = *checked;
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, enabled, state, label)
+    });
+    if ui.is_rect_visible(rect) {
+        let visuals = ui.style().interact(&response);
+        let center = egui::pos2(rect.left() + DIAMETER / 2.0, rect.center().y);
+        let fill = if *checked {
+            ui.visuals().selection.bg_fill
+        } else {
+            ui.visuals().widgets.inactive.bg_fill
+        };
+        let stroke = if response.hovered() {
+            Stroke::new(1.0_f32, ui.visuals().hyperlink_color)
+        } else {
+            Stroke::NONE
+        };
+        let painter = ui.painter();
+        painter.circle(center, DIAMETER / 2.0, fill, stroke);
+        if *checked {
+            painter.add(egui::Shape::line(
+                vec![
+                    center + egui::vec2(-4.0, 0.0),
+                    center + egui::vec2(-1.0, 3.0),
+                    center + egui::vec2(4.5, -3.0),
+                ],
+                Stroke::new(1.8_f32, Color32::WHITE),
+            ));
+        }
+        let text_pos = egui::pos2(
+            rect.left() + DIAMETER + 8.0,
+            rect.center().y - galley.size().y / 2.0,
+        );
+        painter.galley(text_pos, galley, visuals.text_color());
+    }
+    response
+}
+
+// Small rounded outline badge with a colored status dot, e.g. "● Online".
+pub fn status_pill(ui: &mut egui::Ui, text: &str, dot: Color32) -> egui::Response {
+    let border = ui.visuals().widgets.noninteractive.bg_stroke.color;
+    let galley = ui.painter().layout_no_wrap(
+        text.to_owned(),
+        FontId::proportional(11.0),
+        ui.visuals().text_color(),
+    );
+    let size = egui::vec2(galley.size().x + 30.0, 22.0);
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::hover());
+    if ui.is_rect_visible(rect) {
+        let painter = ui.painter();
+        painter.rect_stroke(rect, 11.0, Stroke::new(1.0_f32, border));
+        painter.circle_filled(egui::pos2(rect.left() + 12.0, rect.center().y), 3.5, dot);
+        painter.galley(
+            egui::pos2(rect.left() + 21.0, rect.center().y - galley.size().y / 2.0),
+            galley,
+            Color32::WHITE,
+        );
+    }
+    response
+}
+
+pub const STATUS_OK: Color32 = Color32::from_rgb(0x5e, 0xd6, 0x8f);
+pub const STATUS_BUSY: Color32 = Color32::from_rgb(0xf2, 0xd2, 0x8b);
+
+// Left-aligned bold page title with an optional status pill on the right.
+pub fn page_heading(ui: &mut egui::Ui, title: &str, pill: Option<(&str, Color32)>) {
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(title).size(19.0).strong());
+        if let Some((text, dot)) = pill {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                status_pill(ui, text, dot);
+            });
+        }
+    });
+    ui.add_space(8.0);
+}
+
+// Uppercase, muted label that introduces a group of settings.
+pub fn section_label(ui: &mut egui::Ui, text: &str, muted: Color32) {
+    ui.label(
+        RichText::new(text.to_uppercase())
+            .size(11.0)
+            .strong()
+            .color(muted),
+    );
+}
+
+// Thin full-width rule in the theme's border color.
+pub fn divider(ui: &mut egui::Ui) {
+    let color = ui.visuals().widgets.noninteractive.bg_stroke.color;
+    let (rect, _) =
+        ui.allocate_exact_size(egui::vec2(ui.available_width(), 1.0), egui::Sense::hover());
+    ui.painter().rect_filled(rect, 0.0, color);
+}
+
+// Muted caption above a value, as in the template's status row.
+pub fn stat(ui: &mut egui::Ui, caption: &str, value: &str, muted: Color32) {
+    ui.vertical(|ui| {
+        ui.spacing_mut().item_spacing.y = 4.0;
+        ui.label(RichText::new(caption).size(11.0).color(muted));
+        ui.add(egui::Label::new(RichText::new(value).size(13.0)).truncate());
+    });
+}
+
+// Preview card for the theme picker grid.
+pub fn theme_card(ui: &mut egui::Ui, theme: Theme, selected: bool, width: f32) -> egui::Response {
+    let p = theme.palette();
+    let (rect, response) =
+        ui.allocate_exact_size(egui::vec2(width, 88.0), egui::Sense::click());
+    let enabled = ui.is_enabled();
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::RadioButton, enabled, selected, theme.label())
+    });
+    if ui.is_rect_visible(rect) {
+        let stroke = if selected {
+            Stroke::new(2.0_f32, p.ring)
+        } else if response.hovered() {
+            Stroke::new(1.0_f32, p.ring)
+        } else {
+            Stroke::new(1.0_f32, p.border)
+        };
+        let painter = ui.painter();
+        painter.rect(rect, 10.0, p.background, stroke);
+        let preview = egui::Rect::from_min_size(
+            rect.min + egui::vec2(6.0, 6.0),
+            egui::vec2(rect.width() - 12.0, 50.0),
+        );
+        painter.rect_filled(preview, 6.0, p.surface);
+        let bar = |offset: egui::Vec2, length: f32, color: Color32| {
+            painter.rect_filled(
+                egui::Rect::from_min_size(
+                    preview.min + offset,
+                    egui::vec2(length.min(preview.width() - 16.0), 10.0),
+                ),
+                5.0,
+                color,
+            );
+        };
+        bar(egui::vec2(10.0, 11.0), 52.0, p.primary);
+        bar(egui::vec2(10.0, 27.0), 72.0, p.accent);
+        painter.text(
+            egui::pos2(rect.left() + 9.0, rect.bottom() - 9.0),
+            egui::Align2::LEFT_BOTTOM,
+            theme.label(),
+            FontId::proportional(12.0),
+            Color32::WHITE,
+        );
     }
     response
 }

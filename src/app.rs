@@ -57,6 +57,7 @@ pub struct ExtractorApp {
     logs: VecDeque<String>,
     last_output: Option<PathBuf>,
     avatar: Option<egui::TextureHandle>,
+    app_icon: Option<egui::TextureHandle>,
     avatar_receiver: Option<Receiver<Result<Vec<u8>, String>>>,
     avatar_requested: Option<Instant>,
     avatar_status: String,
@@ -113,6 +114,7 @@ impl ExtractorApp {
             logs,
             last_output: None,
             avatar: None,
+            app_icon: None,
             avatar_receiver: None,
             avatar_requested: None,
             avatar_status: String::new(),
@@ -423,19 +425,19 @@ impl ExtractorApp {
                     .color(palette.muted),
             );
         });
-        ui.add_space(17.0);
+        ui.add_space(14.0);
         ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 15.0;
-            let width = 111.0_f32.min(((ui.available_width() - 45.0) / 4.0).max(60.0));
-            ui.add_space(((ui.available_width() - (width * 4.0 + 45.0)) / 2.0).max(0.0));
+            ui.spacing_mut().item_spacing.x = 12.0;
+            let width = 104.0_f32.min(((ui.available_width() - 36.0) / 4.0).max(60.0));
+            ui.add_space(((ui.available_width() - (width * 4.0 + 36.0)) / 2.0).max(0.0));
             for (page, label) in [
                 (Page::Home, "Home"),
-                (Page::Console, "Console"),
                 (Page::Settings, "Settings"),
+                (Page::Console, "Console"),
                 (Page::About, "About"),
             ] {
                 let active = self.page == page;
-                let response = theme::button(ui, label, [width, 36.0], active, 12.0);
+                let response = theme::button(ui, label, [width, 34.0], active, 12.0);
                 if page == Page::About && self.updater.update_available() {
                     ui.painter().circle_filled(
                         response.rect.right_top() + egui::vec2(-10.0, 10.0),
@@ -448,60 +450,91 @@ impl ExtractorApp {
                 }
             }
         });
-        ui.add_space(17.0);
-        let (rect, _) =
-            ui.allocate_exact_size(egui::vec2(ui.available_width(), 2.0), egui::Sense::hover());
-        ui.painter().rect_filled(rect, 0.0, palette.border);
+        ui.add_space(16.0);
     }
 
     fn home(&mut self, ui: &mut egui::Ui) {
         let palette = self.settings.theme.palette();
         let busy = self.receiver.is_some();
-        ui.add_space(55.0);
-        ui.vertical_centered(|ui| {
-            ui.set_max_width(818.0);
-            ui.add_enabled_ui(!busy && !self.updater.installing, |ui| {
-                ui.label("Unity asset bundle");
-                ui.horizontal(|ui| {
-                    let field_width = (ui.available_width() - 147.0).max(150.0);
-                    ui.add_sized(
-                        [field_width, 38.0],
-                        egui::TextEdit::singleline(&mut self.bundle)
-                            .hint_text("Select a Unity bundle")
-                            .margin(egui::vec2(16.0, 9.0))
-                            .vertical_align(egui::Align::Center),
-                    );
-                    if theme::button(ui, "Browse", [135.0, 38.0], false, 13.0).clicked() {
-                        if let Some(path) = rfd::FileDialog::new()
-                            .set_title("Select a Unity asset bundle")
-                            .pick_file()
-                        {
-                            self.bundle = path.to_string_lossy().into_owned();
-                        }
+        let cancelling = busy && self.cancel.load(Ordering::Relaxed);
+        let (state, dot) = if cancelling {
+            ("Cancelling", theme::STATUS_BUSY)
+        } else if busy {
+            ("Extracting", palette.ring)
+        } else if self.updater.installing {
+            ("Updating", theme::STATUS_BUSY)
+        } else {
+            ("Ready", theme::STATUS_OK)
+        };
+        theme::page_heading(ui, "Extract", Some((state, dot)));
+        ui.add_enabled_ui(!busy && !self.updater.installing, |ui| {
+            ui.label("Unity asset bundle");
+            ui.horizontal(|ui| {
+                let field_width = (ui.available_width() - 122.0).max(150.0);
+                ui.add_sized(
+                    [field_width, 34.0],
+                    egui::TextEdit::singleline(&mut self.bundle)
+                        .hint_text("Select a Unity bundle")
+                        .margin(egui::vec2(14.0, 7.0))
+                        .vertical_align(egui::Align::Center),
+                );
+                if theme::outline_button(ui, "Browse...", [110.0, 34.0]).clicked() {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .set_title("Select a Unity asset bundle")
+                        .pick_file()
+                    {
+                        self.bundle = path.to_string_lossy().into_owned();
                     }
-                });
-                ui.add_space(26.0);
-                if action(ui, "Extract", [180.0, 58.0]).clicked() {
-                    self.start();
                 }
             });
-            ui.add_space(16.0);
-            if busy {
-                ui.add(
-                    egui::ProgressBar::new(self.progress)
-                        .fill(palette.primary)
-                        .animate(true)
-                        .desired_width(400.0),
-                );
-                ui.spinner();
+        });
+        ui.add_space(10.0);
+        theme::divider(ui);
+        ui.add_space(4.0);
+        let save_to = if self.settings.use_default_folder {
+            self.settings.default_folder.clone()
+        } else {
+            "Ask each time".to_owned()
+        };
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 40.0;
+            theme::stat(ui, "Status", state, palette.muted);
+            let progress = if busy {
+                format!("{:.0}%", self.progress * 100.0)
+            } else {
+                "—".to_owned()
+            };
+            theme::stat(ui, "Progress", &progress, palette.muted);
+            theme::stat(ui, "Save to", &save_to, palette.muted);
+        });
+        theme::stat(ui, "Last activity", &self.status, palette.muted);
+        if busy {
+            ui.add(
+                egui::ProgressBar::new(self.progress)
+                    .fill(palette.primary)
+                    .animate(true)
+                    .desired_height(6.0),
+            );
+        }
+        ui.add_space(4.0);
+        theme::divider(ui);
+        ui.add_space(10.0);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.spacing_mut().item_spacing.x = 10.0;
+            let extract_enabled = !busy && !self.updater.installing;
+            if ui
+                .add_enabled_ui(extract_enabled, |ui| action(ui, "Extract", [128.0, 34.0]))
+                .inner
+                .clicked()
+            {
+                self.start();
             }
-            ui.label(RichText::new(&self.status).color(palette.muted));
             if busy {
                 if ui
-                    .add_enabled(
-                        !self.cancel.load(Ordering::Relaxed),
-                        egui::Button::new("Cancel"),
-                    )
+                    .add_enabled_ui(!cancelling, |ui| {
+                        theme::outline_button(ui, "Cancel", [96.0, 34.0])
+                    })
+                    .inner
                     .clicked()
                 {
                     self.cancel.store(true, Ordering::Relaxed);
@@ -510,79 +543,105 @@ impl ExtractorApp {
                         "Cancellation requested. Waiting for the current decoder stage.".into(),
                     );
                 }
-            } else if self.last_output.is_some() {
-                if ui.button("Open output folder").clicked() {
-                    self.open_output();
-                }
-            }
-            ui.add_space(8.0);
-            if self.settings.use_default_folder {
-                ui.small(format!("Save to: {}", self.settings.default_folder));
-            } else {
-                ui.small("You’ll choose where to save when you extract.");
+            } else if self.last_output.is_some()
+                && theme::button(ui, "Open output folder", [160.0, 34.0], false, 13.0).clicked()
+            {
+                self.open_output();
             }
         });
     }
 
     fn console(&mut self, ui: &mut egui::Ui) {
         let palette = self.settings.theme.palette();
-        ui.add_space(18.0);
-        ui.horizontal(|ui| {
-            ui.heading("Console");
-            if ui.button("Copy log").clicked() {
-                ui.output_mut(|output| {
-                    output.copied_text = self.logs.iter().cloned().collect::<Vec<_>>().join("\n")
-                });
-            }
-            if ui
-                .add_enabled(self.receiver.is_none(), egui::Button::new("Clear"))
-                .clicked()
-            {
-                self.logs.clear();
-            }
-        });
-        ui.label(&self.status);
-        ui.add_space(6.0);
+        let busy = self.receiver.is_some();
+        theme::page_heading(
+            ui,
+            "Console",
+            Some(if busy {
+                ("Running", palette.ring)
+            } else {
+                ("Idle", theme::STATUS_OK)
+            }),
+        );
+        // Leave room below the log for the action row.
+        let log_height = (ui.available_height() - 28.0 - 56.0).max(120.0);
         egui::Frame::none()
             .fill(palette.surface)
-            .rounding(16.0)
-            .inner_margin(20.0)
+            .rounding(10.0)
+            .inner_margin(14.0)
             .show(ui, |ui| {
                 egui::ScrollArea::vertical()
                     .stick_to_bottom(true)
                     .auto_shrink([false, false])
+                    .max_height(log_height)
                     .show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.y = 6.0;
                         if self.logs.is_empty() {
                             ui.label(
                                 RichText::new("Extraction activity will appear here.")
                                     .color(palette.muted),
                             );
                         }
+                        let font = egui::FontId::monospace(12.0);
                         for line in &self.logs {
-                            ui.monospace(line);
+                            let (level, color) = log_level(line);
+                            let mut job = egui::text::LayoutJob::default();
+                            job.append(
+                                &format!("{level:<5}"),
+                                0.0,
+                                egui::TextFormat::simple(font.clone(), color),
+                            );
+                            job.append(
+                                line,
+                                14.0,
+                                egui::TextFormat::simple(font.clone(), Color32::WHITE),
+                            );
+                            ui.label(job);
                         }
                     });
             });
+        ui.add_space(12.0);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.spacing_mut().item_spacing.x = 10.0;
+            if action(ui, "Copy all", [104.0, 34.0]).clicked() {
+                ui.output_mut(|output| {
+                    output.copied_text = self.logs.iter().cloned().collect::<Vec<_>>().join("\n")
+                });
+            }
+            if ui
+                .add_enabled_ui(!busy, |ui| theme::outline_button(ui, "Clear", [90.0, 34.0]))
+                .inner
+                .clicked()
+            {
+                self.logs.clear();
+            }
+        });
     }
 
     fn settings_page(&mut self, ui: &mut egui::Ui) {
         let palette = self.settings.theme.palette();
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-        ui.add_space(32.0);
-        ui.vertical_centered(|ui| {
-            ui.set_max_width(818.0);
-            ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
-            ui.heading("Settings");
-            ui.label("Theme");
+            theme::page_heading(ui, "Settings", None);
+            theme::section_label(ui, "Theme", palette.muted);
             let previous = self.draft.theme;
-            egui::ComboBox::from_id_salt("theme")
-                .selected_text(self.draft.theme.label())
-                .width(240.0)
-                .show_ui(ui, |ui| {
-                    for theme in Theme::ALL {
-                        ui.selectable_value(&mut self.draft.theme, theme, theme.label());
+            let gap = 10.0;
+            let columns = ((ui.available_width() + gap) / (130.0 + gap))
+                .floor()
+                .clamp(2.0, 5.0) as usize;
+            let card_width =
+                (ui.available_width() - gap * (columns as f32 - 1.0)) / columns as f32;
+            for row in Theme::ALL.chunks(columns) {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = gap;
+                    for &option in row {
+                        if theme::theme_card(ui, option, self.draft.theme == option, card_width)
+                            .clicked()
+                        {
+                            self.draft.theme = option;
+                        }
                     }
                 });
+            }
             if self.draft.theme != previous {
                 self.settings.theme = self.draft.theme;
                 self.settings.theme.apply(ui.ctx());
@@ -592,48 +651,29 @@ impl ExtractorApp {
                     Err(err) => format!("Theme applied, but could not save it: {err}"),
                 };
             }
-            ui.small("Theme changes apply and save automatically.");
-            ui.add_space(18.0);
-            ui.separator();
-            ui.add_space(12.0);
-            ui.heading("Window behavior");
-            if ui.checkbox(&mut self.draft.close_to_tray, "Close to system tray").changed() {
-                self.settings.close_to_tray = self.draft.close_to_tray;
-                ui.ctx().request_repaint();
-                self.settings_status = match self.settings.save() {
-                    Ok(()) => "Window behavior saved.".into(),
-                    Err(err) => format!("Window behavior applied, but could not save it: {err}"),
-                };
-            }
-            ui.small("Closing the window keeps the app running. Use the tray menu to show it again or quit.");
-            ui.add_space(18.0);
-            ui.separator();
-            ui.add_space(12.0);
-            ui.heading("Save location");
-            ui.add_space(12.0);
-            ui.checkbox(
-                &mut self.draft.use_default_folder,
-                "Always use this output folder",
+            ui.label(
+                RichText::new("Theme changes apply and save automatically.")
+                    .size(11.0)
+                    .color(palette.muted),
             );
-            ui.add_space(8.0);
-            ui.add_enabled_ui(self.draft.use_default_folder, |ui| {
-                ui.horizontal(|ui| {
+            ui.add_space(10.0);
+            theme::section_label(ui, "General", palette.muted);
+            ui.label("Default folder");
+            ui.horizontal(|ui| {
+                ui.add_enabled_ui(self.draft.use_default_folder, |ui| {
                     let browse_width = 100.0;
                     let field_width = (ui.available_width()
                         - browse_width
                         - ui.spacing().item_spacing.x)
-                        .clamp(150.0, 400.0);
+                        .clamp(150.0, 420.0);
                     ui.add_sized(
                         [field_width, 32.0],
                         egui::TextEdit::singleline(&mut self.draft.default_folder)
                             .hint_text("Output folder")
-                            .margin(egui::vec2(16.0, 7.0))
+                            .margin(egui::vec2(14.0, 7.0))
                             .vertical_align(egui::Align::Center),
                     );
-                    if ui
-                        .add_sized([browse_width, 32.0], egui::Button::new("Browse..."))
-                        .clicked()
-                    {
+                    if theme::outline_button(ui, "Browse...", [browse_width, 32.0]).clicked() {
                         if let Some(path) = rfd::FileDialog::new()
                             .set_title("Default extraction folder")
                             .pick_folder()
@@ -643,24 +683,49 @@ impl ExtractorApp {
                     }
                 });
             });
-            ui.label(
-                RichText::new("Leave this off to choose a destination for each extraction.")
-                    .color(palette.muted),
-            );
-            ui.small("Each bundle gets its own folder. Existing folders prompt for a new name or overwrite.");
-            ui.add_space(14.0);
-            if action(ui, "Save settings", [170.0, 38.0]).clicked() {
-                match self.draft.save() {
-                    Ok(()) => {
-                        self.settings = self.draft.clone();
-                        self.settings_status = "Settings saved.".into();
-                    }
-                    Err(err) => self.settings_status = format!("Could not save settings: {err}"),
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 24.0;
+                theme::checkbox(
+                    ui,
+                    &mut self.draft.use_default_folder,
+                    "Always use this output folder",
+                );
+                if theme::checkbox(ui, &mut self.draft.close_to_tray, "Close to system tray")
+                    .changed()
+                {
+                    self.settings.close_to_tray = self.draft.close_to_tray;
+                    ui.ctx().request_repaint();
+                    self.settings_status = match self.settings.save() {
+                        Ok(()) => "Window behavior saved.".into(),
+                        Err(err) => {
+                            format!("Window behavior applied, but could not save it: {err}")
+                        }
+                    };
                 }
-            }
-            ui.label(&self.settings_status);
             });
-        });
+            for hint in [
+                "Leave the output folder off to choose a destination for each extraction. Each bundle gets its own folder; existing folders prompt for a new name or overwrite.",
+                "Closing the window to the tray keeps the app running. Use the tray menu to show it again or quit.",
+            ] {
+                ui.label(RichText::new(hint).size(11.0).color(palette.muted));
+            }
+            ui.add_space(6.0);
+            theme::divider(ui);
+            ui.add_space(10.0);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if action(ui, "Save settings", [140.0, 34.0]).clicked() {
+                    match self.draft.save() {
+                        Ok(()) => {
+                            self.settings = self.draft.clone();
+                            self.settings_status = "Settings saved.".into();
+                        }
+                        Err(err) => {
+                            self.settings_status = format!("Could not save settings: {err}")
+                        }
+                    }
+                }
+                ui.label(RichText::new(&self.settings_status).color(palette.muted));
+            });
         });
     }
 
@@ -672,52 +737,120 @@ impl ExtractorApp {
         if refresh_due {
             self.refresh_avatar();
         }
+        if self.app_icon.is_none() {
+            if let Ok(image) = avatar::decode(include_bytes!(
+                "../assets/io.github.TheDoctorTTV.AssetExtractor.png"
+            )) {
+                self.app_icon =
+                    Some(ui.ctx().load_texture("app-icon", image, egui::TextureOptions::LINEAR));
+            }
+        }
+        let extraction_busy = self.receiver.is_some() || self.conflict.is_some();
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                ui.add_space(22.0);
-                ui.heading("About");
-                ui.add_space(16.0);
+                ui.vertical_centered(|ui| {
+                ui.add_space(24.0);
+                if let Some(texture) = &self.app_icon {
+                    ui.add(
+                        egui::Image::new(texture)
+                            .fit_to_exact_size(egui::vec2(76.0, 76.0))
+                            .rounding(18.0),
+                    );
+                } else {
+                    let (rect, _) =
+                        ui.allocate_exact_size(egui::vec2(76.0, 76.0), egui::Sense::hover());
+                    ui.painter().rect_filled(rect, 18.0, palette.primary);
+                    ui.painter().text(
+                        rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        "A",
+                        egui::FontId::proportional(38.0),
+                        Color32::WHITE,
+                    );
+                }
+                ui.add_space(4.0);
+                ui.label(RichText::new("Asset Extractor").size(22.0).strong());
+                ui.label(
+                    RichText::new(env!("CARGO_PKG_DESCRIPTION"))
+                        .size(12.0)
+                        .color(palette.muted),
+                );
+                let version = concat!("v", env!("CARGO_PKG_VERSION"));
+                if self.updater.enabled() {
+                    let dot = if self.updater.update_available() {
+                        palette.ring
+                    } else if self.updater.status == "Up to date" {
+                        theme::STATUS_OK
+                    } else {
+                        theme::STATUS_BUSY
+                    };
+                    theme::status_pill(ui, &format!("{} · {version}", self.updater.status), dot)
+                        .on_hover_text(&self.updater.status);
+                } else {
+                    theme::status_pill(ui, &format!("Managed by Gear Lever · {version}"), theme::STATUS_OK);
+                }
+                ui.add_space(8.0);
+                let preferences_changed = self.updater.show(ui, extraction_busy);
+                ui.add_space(8.0);
+                // Center the action row: GitHub plus the updater's two buttons.
                 ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 10.0;
+                    let width = if self.updater.enabled() {
+                        90.0 + 120.0 + 150.0 + 20.0
+                    } else {
+                        90.0
+                    };
+                    ui.add_space(((ui.available_width() - width) / 2.0).max(0.0));
+                    if theme::outline_button(ui, "GitHub", [90.0, 34.0]).clicked() {
+                        if let Err(err) =
+                            open::that_detached("https://github.com/TheDoctorTTV/Asset-Extractor")
+                        {
+                            self.log(format!("Could not open GitHub: {err}"));
+                        }
+                    }
+                    self.updater.action_buttons(ui, extraction_busy);
+                });
+                ui.add_space(18.0);
+                ui.horizontal(|ui| {
+                    let label_width = ui.fonts(|fonts| {
+                        fonts
+                            .layout_no_wrap(
+                                "Created by TheDoctorTTV".into(),
+                                egui::FontId::proportional(13.0),
+                                Color32::WHITE,
+                            )
+                            .size()
+                            .x
+                    });
+                    ui.add_space(((ui.available_width() - label_width - 40.0) / 2.0).max(0.0));
                     if let Some(texture) = &self.avatar {
                         ui.add(
                             egui::Image::new(texture)
-                                .fit_to_exact_size(egui::vec2(48.0, 48.0))
-                                .rounding(24.0),
+                                .fit_to_exact_size(egui::vec2(28.0, 28.0))
+                                .rounding(14.0),
                         );
                     } else {
                         let (rect, _) =
-                            ui.allocate_exact_size(egui::vec2(48.0, 48.0), egui::Sense::hover());
+                            ui.allocate_exact_size(egui::vec2(28.0, 28.0), egui::Sense::hover());
                         ui.painter()
-                            .circle_filled(rect.center(), 24.0, palette.primary);
+                            .circle_filled(rect.center(), 14.0, palette.primary);
                         ui.painter().text(
                             rect.center(),
                             egui::Align2::CENTER_CENTER,
                             "TD",
-                            egui::FontId::proportional(18.0),
+                            egui::FontId::proportional(11.0),
                             Color32::WHITE,
                         );
                     }
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label("Created by");
-                        ui.hyperlink_to(
-                            RichText::new("TheDoctorTTV").strong(),
-                            "https://github.com/TheDoctorTTV/Asset-Extractor",
-                        )
-                        .on_hover_text("Asset-Extractor");
-                    });
+                    ui.spacing_mut().item_spacing.x = 4.0;
+                    ui.label(RichText::new("Created by").color(palette.muted));
+                    ui.hyperlink_to(
+                        RichText::new("TheDoctorTTV").strong(),
+                        "https://github.com/TheDoctorTTV/Asset-Extractor",
+                    )
+                    .on_hover_text("Asset-Extractor");
                 });
-                if !self.updater.enabled() {
-                    ui.add_space(16.0);
-                    ui.label("Updates for this AppImage are managed by Gear Lever.");
-                    return;
-                }
-                ui.add_space(26.0);
-                ui.separator();
-                ui.add_space(16.0);
-                let preferences_changed = self
-                    .updater
-                    .show(ui, self.receiver.is_some() || self.conflict.is_some());
                 if preferences_changed {
                     self.settings.update_channel = self.updater.channel;
                     self.settings.update_check_interval = self.updater.interval;
@@ -730,6 +863,7 @@ impl ExtractorApp {
                         self.log(self.updater.status.clone());
                     }
                 }
+                });
             });
     }
 }
@@ -756,6 +890,7 @@ impl ExtractorApp {
         // Texture handles belong to the old renderer. Reload the optional avatar
         // while retaining all application data, workers and update state.
         self.avatar = None;
+        self.app_icon = None;
         self.avatar_requested = None;
     }
 
@@ -917,22 +1052,42 @@ impl eframe::App for ExtractorApp {
             .frame(
                 egui::Frame::none()
                     .fill(palette.background)
-                    .inner_margin(egui::Margin::symmetric(32.0, 14.0)),
+                    .inner_margin(egui::Margin::symmetric(0.0, 14.0)),
             )
             .show(ctx, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.set_max_width(978.0);
-                    ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
-                        ui.add_enabled_ui(self.conflict.is_none(), |ui| {
-                            self.header(ui);
-                            match self.page {
-                                Page::Home => self.home(ui),
-                                Page::Console => self.console(ui),
-                                Page::Settings => self.settings_page(ui),
-                                Page::About => self.about(ui),
-                            }
+                ui.add_enabled_ui(self.conflict.is_none(), |ui| {
+                    egui::Frame::none()
+                        .inner_margin(egui::Margin::symmetric(32.0, 0.0))
+                        .show(ui, |ui| {
+                            ui.vertical_centered(|ui| {
+                                ui.set_max_width(978.0);
+                                ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                                    self.header(ui);
+                                });
+                            });
                         });
-                    });
+                    // The header rule spans the full window, as in the template.
+                    theme::divider(ui);
+                    egui::Frame::none()
+                        .inner_margin(egui::Margin {
+                            left: 56.0,
+                            right: 56.0,
+                            top: 26.0,
+                            bottom: 8.0,
+                        })
+                        .show(ui, |ui| {
+                            ui.vertical_centered(|ui| {
+                                ui.set_max_width(900.0);
+                                ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                                    match self.page {
+                                        Page::Home => self.home(ui),
+                                        Page::Console => self.console(ui),
+                                        Page::Settings => self.settings_page(ui),
+                                        Page::About => self.about(ui),
+                                    }
+                                });
+                            });
+                        });
                 });
             });
         self.conflict_prompt(ctx);
@@ -943,6 +1098,24 @@ impl Drop for ExtractorApp {
     fn drop(&mut self) {
         self.tray_actions.mark_quitting();
         self.cancel.store(true, Ordering::Relaxed);
+    }
+}
+
+// Classify a log line for the console's colored level tag.
+fn log_level(line: &str) -> (&'static str, Color32) {
+    let lower = line.to_ascii_lowercase();
+    if ["error", "failed", "could not", "stopped unexpectedly"]
+        .iter()
+        .any(|word| lower.contains(word))
+    {
+        ("ERROR", Color32::from_rgb(0xff, 0x8a, 0x8a))
+    } else if ["warn", "cancel", "unavailable", "skipp"]
+        .iter()
+        .any(|word| lower.contains(word))
+    {
+        ("WARN", theme::STATUS_BUSY)
+    } else {
+        ("INFO", theme::STATUS_OK)
     }
 }
 

@@ -395,6 +395,142 @@ impl Updater {
         let old_interval = self.interval;
         let old_automatic_updates = self.automatic_updates;
         let busy = self.receiver.is_some() || self.installed;
+        let muted = ui.visuals().widgets.noninteractive.fg_stroke.color;
+        let surface = ui.visuals().window_fill;
+        let combo_width = 190.0;
+        // Compact info card, as in the template's About page.
+        egui::Frame::none()
+            .fill(surface)
+            .rounding(10.0)
+            .inner_margin(egui::Margin::symmetric(16.0, 12.0))
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width().min(440.0));
+                ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                    ui.spacing_mut().item_spacing.y = 8.0;
+                    let row = |ui: &mut egui::Ui, label: &str, add: &mut dyn FnMut(&mut egui::Ui)| {
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new(label).size(12.0).color(muted));
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| add(ui),
+                            );
+                        });
+                    };
+                    ui.add_enabled_ui(!busy, |ui| {
+                        row(ui, "Update channel", &mut |ui| {
+                            egui::ComboBox::from_id_salt("update-channel")
+                                .width(combo_width)
+                                .selected_text(self.channel.label())
+                                .show_ui(ui, |ui| {
+                                    for channel in [Channel::Stable, Channel::Prerelease] {
+                                        ui.selectable_value(
+                                            &mut self.channel,
+                                            channel,
+                                            channel.label(),
+                                        );
+                                    }
+                                });
+                        });
+                        let channel_unchanged = old_channel == self.channel;
+                        row(ui, "Version", &mut |ui| {
+                            ui.add_enabled_ui(channel_unchanged, |ui| {
+                                let selected = self
+                                    .releases
+                                    .get(self.selected)
+                                    .map(|r| r.tag.trim_start_matches(['v', 'V']))
+                                    .unwrap_or("Check to load versions");
+                                egui::ComboBox::from_id_salt("update-version")
+                                    .width(combo_width)
+                                    .selected_text(selected)
+                                    .show_ui(ui, |ui| {
+                                        for (index, release) in self.releases.iter().enumerate() {
+                                            let label = if release.binary.is_some() {
+                                                release.version.to_string()
+                                            } else {
+                                                format!(
+                                                    "{} (download unavailable)",
+                                                    release.version
+                                                )
+                                            };
+                                            ui.selectable_value(&mut self.selected, index, label);
+                                        }
+                                    });
+                            });
+                        });
+                        row(ui, "Checks after startup", &mut |ui| {
+                            egui::ComboBox::from_id_salt("update-interval")
+                                .width(combo_width)
+                                .selected_text(self.interval.label())
+                                .show_ui(ui, |ui| {
+                                    for interval in [
+                                        CheckInterval::StartupOnly,
+                                        CheckInterval::Hourly,
+                                        CheckInterval::Daily,
+                                        CheckInterval::TwoDays,
+                                        CheckInterval::Weekly,
+                                    ] {
+                                        ui.selectable_value(
+                                            &mut self.interval,
+                                            interval,
+                                            interval.label(),
+                                        );
+                                    }
+                                });
+                        });
+                    });
+                    let active = self.receiver.is_some() || self.installing;
+                    if active {
+                        ui.add(
+                            egui::ProgressBar::new(self.progress)
+                                .desired_height(6.0)
+                                .animate(true),
+                        );
+                    }
+                    crate::theme::checkbox(
+                        ui,
+                        &mut self.automatic_updates,
+                        "Automatically install updates at startup",
+                    );
+                    ui.label(
+                        egui::RichText::new("On launch, download and install a newer version from the selected channel, then restart. Waits for any active extraction to finish.")
+                            .size(11.0)
+                            .color(muted),
+                    );
+                    if extraction_busy {
+                        ui.label(
+                            egui::RichText::new(
+                                "Finish or cancel extraction before installing an update.",
+                            )
+                            .size(11.0)
+                            .color(ui.visuals().warn_fg_color),
+                        );
+                    }
+                });
+            });
+        if !self.automatic_updates {
+            self.pending_automatic_install = None;
+        }
+        let channel_changed = old_channel != self.channel;
+        if channel_changed {
+            self.releases.clear();
+            self.selected = 0;
+            self.checked = false;
+            self.check();
+        }
+        if old_interval != self.interval {
+            self.next_check = Instant::now() + Duration::from_secs(self.interval.seconds());
+        }
+        channel_changed
+            || old_interval != self.interval
+            || old_automatic_updates != self.automatic_updates
+    }
+
+    // Install (secondary) and Check for updates (primary) for the About action row.
+    pub fn action_buttons(&mut self, ui: &mut egui::Ui, extraction_busy: bool) {
+        if !self.enabled {
+            return;
+        }
+        let busy = self.receiver.is_some() || self.installed;
         let installable = self
             .releases
             .get(self.selected)
@@ -408,130 +544,24 @@ impl Updater {
             Some(std::cmp::Ordering::Equal) => "Reinstall",
             _ => "Update",
         };
-        let mut check_clicked = false;
-        let mut install_clicked = false;
-        ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("App Updates").size(16.0));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                install_clicked = ui
-                    .add_enabled(
-                        !busy && !extraction_busy && installable,
-                        egui::Button::new(install_label),
-                    )
-                    .on_hover_text("Install the selected version and restart the app")
-                    .clicked();
-                check_clicked = ui.add_enabled(!busy, egui::Button::new("Check")).clicked();
-            });
-        });
-        ui.horizontal(|ui| {
-            let color = if self.update_available() {
-                ui.visuals().selection.bg_fill
-            } else {
-                ui.visuals().text_color()
-            };
-            let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-            ui.painter().circle_filled(rect.center(), 4.0, color);
-            ui.add(egui::Label::new(&self.status).truncate())
-                .on_hover_text(&self.status);
-        });
-        let active = self.receiver.is_some() || self.installing;
-        ui.add(
-            egui::ProgressBar::new(if active { self.progress } else { 0.0 })
-                .desired_height(6.0)
-                .animate(active),
-        );
-        ui.add_space(8.0);
-        ui.checkbox(
-            &mut self.automatic_updates,
-            "Automatically install updates at startup",
-        );
-        ui.small("On launch, download and install a newer version from the selected channel, then restart. Waits for any active extraction to finish.");
-        if !self.automatic_updates {
-            self.pending_automatic_install = None;
-        }
-        ui.add_space(8.0);
-        // Match stream247's labeled fields, wrapping whole fields on small windows.
-        let field_width = ((ui.available_width() - 24.0) / 3.0)
-            .max(180.0)
-            .min(ui.available_width());
-        ui.add_enabled_ui(!busy, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                ui.vertical(|ui| {
-                    ui.set_width(field_width);
-                    ui.small("Channel");
-                    egui::ComboBox::from_id_salt("update-channel")
-                        .width(field_width)
-                        .selected_text(self.channel.label())
-                        .show_ui(ui, |ui| {
-                            for channel in [Channel::Stable, Channel::Prerelease] {
-                                ui.selectable_value(&mut self.channel, channel, channel.label());
-                            }
-                        });
-                });
-                ui.vertical(|ui| {
-                    ui.set_width(field_width);
-                    ui.small("Version");
-                    ui.add_enabled_ui(old_channel == self.channel, |ui| {
-                        let selected = self
-                            .releases
-                            .get(self.selected)
-                            .map(|r| r.tag.trim_start_matches(['v', 'V']))
-                            .unwrap_or("Check to load versions");
-                        egui::ComboBox::from_id_salt("update-version")
-                            .width(field_width)
-                            .selected_text(selected)
-                            .show_ui(ui, |ui| {
-                                for (index, release) in self.releases.iter().enumerate() {
-                                    let label = if release.binary.is_some() {
-                                        release.version.to_string()
-                                    } else {
-                                        format!("{} (download unavailable)", release.version)
-                                    };
-                                    ui.selectable_value(&mut self.selected, index, label);
-                                }
-                            });
-                    });
-                });
-                ui.vertical(|ui| {
-                    ui.set_width(field_width);
-                    ui.small("Checks after startup");
-                    egui::ComboBox::from_id_salt("update-interval")
-                        .width(field_width)
-                        .selected_text(self.interval.label())
-                        .show_ui(ui, |ui| {
-                            for interval in [
-                                CheckInterval::StartupOnly,
-                                CheckInterval::Hourly,
-                                CheckInterval::Daily,
-                                CheckInterval::TwoDays,
-                                CheckInterval::Weekly,
-                            ] {
-                                ui.selectable_value(&mut self.interval, interval, interval.label());
-                            }
-                        });
-                });
-            });
-        });
-        let channel_changed = old_channel != self.channel;
-        if channel_changed {
-            self.releases.clear();
-            self.selected = 0;
-            self.checked = false;
-            self.check();
-        } else if check_clicked {
+        let install_clicked = ui
+            .add_enabled_ui(!busy && !extraction_busy && installable, |ui| {
+                crate::theme::button(ui, install_label, [120.0, 34.0], false, 13.0)
+            })
+            .inner
+            .on_hover_text("Install the selected version and restart the app")
+            .clicked();
+        let check_clicked = ui
+            .add_enabled_ui(!busy, |ui| {
+                crate::theme::button(ui, "Check for updates", [150.0, 34.0], true, 13.0)
+            })
+            .inner
+            .clicked();
+        if check_clicked {
             self.check();
         } else if install_clicked {
             self.install();
         }
-        if old_interval != self.interval {
-            self.next_check = Instant::now() + Duration::from_secs(self.interval.seconds());
-        }
-        if extraction_busy {
-            ui.small("Finish or cancel extraction before installing an update.");
-        }
-        channel_changed
-            || old_interval != self.interval
-            || old_automatic_updates != self.automatic_updates
     }
 }
 impl Drop for Updater {
